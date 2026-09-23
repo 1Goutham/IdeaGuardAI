@@ -27,6 +27,15 @@ npm run lint
 npm run build
 ```
 
+## Deploying to Vercel
+
+1. Import the repository in Vercel. The framework preset is detected as Next.js; no build settings need changing.
+2. Make sure Vercel builds the branch that contains this app (Settings → Git → Production Branch).
+3. Add environment variables (Settings → Environment Variables): at least one model key, e.g. `GEMINI_API_KEY`, and optionally `TAVILY_API_KEY` for sourced research. Don't set the `mock` options in production.
+4. Node.js 20.9 or newer is required (Settings → Build and Deployment → Node.js Version).
+
+A full analysis makes several model calls in one request, so `/api/analyse` allows up to 300 seconds. That works on every plan with Fluid Compute, which is on by default for new projects.
+
 ## The workspace
 
 | Section | What it answers |
