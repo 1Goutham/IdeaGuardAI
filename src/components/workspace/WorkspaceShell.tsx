@@ -52,7 +52,7 @@ export function WorkspaceShell({ projectId, children }: { projectId: string; chi
 
   return (
     <WorkspaceProvider value={value}>
-      <SourcesProvider sources={version.analysis.research?.sources ?? []}>
+      <SourcesProvider sources={version.analysis.sources?.items ?? version.analysis.research?.sources ?? []}>
         <div className="min-h-dvh">
           <header className="no-print sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur-md">
             <div className="mx-auto flex h-14 max-w-[1320px] items-center gap-4 px-5 md:px-8">

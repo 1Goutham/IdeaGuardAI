@@ -124,18 +124,31 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const actions = useMemo<ProjectActions>(() => {
     const applyEvent = (projectId: string, versionId: string, e: StageEvent) => {
       if (e.type === "done") return;
+      if (e.type === "sources") {
+        mutateVersion(projectId, versionId, (v) => ({ ...v, analysis: { ...v.analysis, sources: e.sources } }));
+        return;
+      }
       mutateVersion(projectId, versionId, (v) => {
         const prev = v.stages[e.stage];
         if (e.type === "note") return { ...v, stages: { ...v.stages, [e.stage]: { ...prev, note: e.note } } };
         if (e.status === "running") return { ...v, stages: { ...v.stages, [e.stage]: { status: "running", startedAt: nowIso() } } };
         if (e.status === "error") {
-          return { ...v, stages: { ...v.stages, [e.stage]: { ...prev, status: "error", error: e.error.message, finishedAt: nowIso() } } };
+          return {
+            ...v,
+            stages: {
+              ...v.stages,
+              [e.stage]: { status: "error", startedAt: prev.startedAt, finishedAt: nowIso(), error: e.error.message, errorCode: e.error.code, errorDetail: e.error.detail },
+            },
+          };
         }
         const analysis: Analysis = { ...v.analysis, [e.stage]: e.data };
         return {
           ...v,
           analysis,
-          stages: { ...v.stages, [e.stage]: { status: "done", startedAt: prev.startedAt, finishedAt: nowIso(), engine: e.engine, note: e.note } },
+          stages: {
+            ...v.stages,
+            [e.stage]: { status: "done", startedAt: prev.startedAt, finishedAt: nowIso(), engine: e.engine, note: e.note, trace: e.trace, missingInputs: e.missingInputs },
+          },
         };
       });
       // The analyst names the project once it understands the idea.
@@ -155,6 +168,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       // Clear stale results for the stages being re-run, then queue them.
       const prior: Analysis = { ...version.analysis };
       for (const id of toRun) delete prior[id];
+      // Re-running research means searching again.
+      if (toRun.includes("research")) delete prior.sources;
       mutateVersion(projectId, versionId, (v) => ({
         ...v,
         analysis: prior,
@@ -176,6 +191,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
               if (stagesNow[id].status === "queued" || stagesNow[id].status === "running") {
                 stagesNow[id] = {
                   status: "error",
+                  errorCode: controller.signal.aborted ? "network" : error?.code,
                   error: controller.signal.aborted ? "Stopped before this step finished." : (error?.message ?? "This step didn't complete."),
                 };
               }

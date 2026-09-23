@@ -1,3 +1,4 @@
+import type { AiErrorCode, AiErrorDetail } from "@/lib/ai/contracts";
 import type {
   BlueprintOutput,
   CompetitorOutput,
@@ -88,7 +89,22 @@ export interface StrategyResult extends Omit<StrategyOutput, "signals"> {
   signals: RevisedSignal[];
 }
 
+/**
+ * Sources gathered for this run. Kept separately from the research synthesis
+ * so that if synthesis fails, agents that cite sources still have them and
+ * the citations still resolve in the report.
+ */
+export interface SourceSet {
+  items: Source[];
+  provider: string | null;
+  queries: string[];
+  gatheredAt: string;
+  /** Search queries that errored, if any. */
+  failedQueries: number;
+}
+
 export interface Analysis {
+  sources?: SourceSet;
   understand?: UnderstandOutput;
   research?: ResearchResult;
   competitors?: CompetitorResult;
@@ -107,15 +123,33 @@ export type StageId = (typeof STAGE_IDS)[number];
 
 export type StageStatus = "idle" | "queued" | "running" | "done" | "error";
 
+/** How a stage was produced, for the technical layer of "How this was produced". */
+export interface StageTrace {
+  provider: string;
+  model: string;
+  /** Provider requests, including rate-limit retries and the repair pass. */
+  calls: number;
+  waitedMs: number;
+  repaired: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  reasoning?: string;
+}
+
 export interface StageState {
   status: StageStatus;
   error?: string;
+  errorCode?: AiErrorCode;
+  errorDetail?: AiErrorDetail;
   startedAt?: string;
   finishedAt?: string;
   /** Engine that produced the result, e.g. "Google Gemini · gemini-2.5-flash". */
   engine?: string;
   /** Short factual note shown in progress, e.g. "14 sources". */
   note?: string;
+  trace?: StageTrace;
+  /** Optional inputs that were unavailable when this stage ran. */
+  missingInputs?: StageId[];
 }
 
 export type StageMap = Record<StageId, StageState>;
