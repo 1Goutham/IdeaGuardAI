@@ -28,7 +28,7 @@ export const tavily: SearchProvider = {
   label: "Tavily",
   configured: () => !!process.env.TAVILY_API_KEY,
   async search(query, limit) {
-    const res = await fetch("https://api.tavily.com/search", {
+    const res = await fetch(`${(process.env.TAVILY_API_BASE || "https://api.tavily.com").replace(/\/$/, "")}/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.TAVILY_API_KEY}` },
       signal: AbortSignal.timeout(TIMEOUT),

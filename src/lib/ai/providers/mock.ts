@@ -1,6 +1,6 @@
 import "server-only";
 import { aiError } from "../contracts";
-import type { Provider, ProviderStatus } from "./types";
+import type { Capabilities, Provider, ProviderStatus } from "./types";
 
 /**
  * Development-only provider. Enabled only when AI_PROVIDERS explicitly lists
@@ -12,6 +12,7 @@ import type { Provider, ProviderStatus } from "./types";
  * MOCK_FAIL=<tag> makes one agent fail, to test partial results and retry.
  */
 
+const failedOnce = new Set<string>();
 const explicitlyEnabled = () => (process.env.AI_PROVIDERS ?? "").split(",").map((s) => s.trim()).includes("mock");
 
 export const mock: Provider = {
@@ -19,14 +20,20 @@ export const mock: Provider = {
   label: "Mock engine (development)",
   signupUrl: "",
   configured: explicitlyEnabled,
+  capabilities: (): Capabilities => ({ jsonMode: true, reasoningEffort: false }),
 
   async complete(opts) {
     const { MOCK_OUTPUTS } = await import("./mockFixtures");
     const tag = opts.tag ?? "";
     const delay = Number(process.env.MOCK_DELAY_MS ?? 900);
     await new Promise((r) => setTimeout(r, delay + Math.random() * delay));
-    if (process.env.MOCK_FAIL && process.env.MOCK_FAIL === tag) {
-      return { ...aiError("rate_limited", "Mock engine: simulated rate limit.", true), model: "fixtures" };
+    // MOCK_FAIL=<tag> fails every attempt; MOCK_FAIL_ONCE=<tag> returns invalid output once, to exercise repair.
+    if (process.env.MOCK_FAIL && process.env.MOCK_FAIL.split(",").includes(tag)) {
+      return { ...aiError("upstream", "Mock engine: simulated provider outage.", false, { provider: "Mock engine", model: "fixtures", status: 503 }), model: "fixtures" };
+    }
+    if (process.env.MOCK_FAIL_ONCE === tag && !failedOnce.has(tag)) {
+      failedOnce.add(tag);
+      return { ok: true, data: JSON.stringify({ unexpected: "shape" }), model: "fixtures" };
     }
     const out = MOCK_OUTPUTS[tag];
     if (!out) return { ...aiError("empty", `Mock engine has no fixture for "${tag}".`, true), model: "fixtures" };

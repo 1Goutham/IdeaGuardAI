@@ -24,7 +24,7 @@ export function tallyEvidence(a: Analysis): EvidenceTally {
   return {
     sourced: bases.filter((b) => b === "evidence").length,
     inferred: bases.filter((b) => b === "inference").length,
-    sources: a.research?.sources.length ?? 0,
+    sources: a.sources?.items.length ?? a.research?.sources.length ?? 0,
     verifiedCompetitors: competitors.filter((c) => c.verified).length,
     unverifiedCompetitors: competitors.filter((c) => !c.verified).length,
   };

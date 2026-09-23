@@ -21,7 +21,7 @@ npm run dev
 To work on the interface without any keys, set `AI_PROVIDERS=mock` and `RESEARCH_PROVIDER=mock`. The mock engine returns fixed sample output about fictional companies with `example.com` sources, and the app labels it as a development engine everywhere it appears.
 
 ```bash
-npm run test        # vitest: schemas, grounding, diff, pipeline, orchestrator
+npm run test        # vitest: schemas, grounding, pipeline, orchestrator, engine, stub integration
 npm run typecheck
 npm run lint
 npm run build
@@ -100,6 +100,32 @@ feasibility     risks                    │
 - **Concurrency where the data allows it.** Competitor mapping starts as soon as sources are gathered, in parallel with research synthesis. Feasibility and risk run in parallel. Each stage starts the moment its inputs exist.
 - **Real progress.** `/api/analyse` streams an event for every stage start, search note, completion and failure. The progress UI only changes when the server says something happened.
 - **Partial failure is normal.** If one agent fails, only the stages that depend on it are blocked. Completed results are kept, and retrying a step re-runs just that step, its failed prerequisites, and what depends on it.
+
+### Reliability on rate-limited models
+
+Free tiers limit tokens per minute (Groq's `openai/gpt-oss-120b`: 8,000 on the base tier). A full analysis uses roughly 17–20K tokens, so the engine is built to work within that rather than fail against it:
+
+- **Compact context.** Each agent receives a digest of earlier results and only the sources relevant to its job (research: 18 trimmed snippets; competition: 10; risk: 6; strategy: titles only). Prompts are 1–3K tokens.
+- **Token budget per provider.** Calls reserve room in a rolling one-minute window, learned from the provider's `x-ratelimit-*` headers. Parallel agents run together when the budget allows and queue when it doesn't, instead of bursting into 429s.
+- **Rate limits are waited out.** A 429 is retried after the provider's `retry-after` (up to three times), and the progress screen says so.
+- **Right-sized output.** Per-agent output limits and `reasoning_effort` (low for extraction, medium for critique and strategy) where the model supports it.
+- **Provider-specific failures are classified.** Groq's `json_validate_failed` and truncated output (`finish_reason: length`) are repairable; a 413 moves to the next provider.
+- **Time budget.** A run stops starting new steps before the serverless limit and marks them paused; *Resume analysis* continues from there.
+
+### Failure isolation
+
+Only the Idea Analyst is a hard requirement. If any other agent fails after its retries, the others continue; the Critic and Strategist run on what exists (with minimums: 2 of 4 inputs for the Critic, 3 of 5 for the Strategist), receive an explicit *UNAVAILABLE INPUTS* note telling them not to fill the gap, and record which inputs were missing. The report marks those sections "built without …", the failed step shows its reason and sanitised technical detail, and *Retry* re-runs just that step and what depends on it.
+
+### Testing the pipeline without keys
+
+```bash
+npm run stub                          # local Groq + Tavily stand-in, enforcing 8K TPM
+GROQ_API_KEY=stub GROQ_API_BASE=http://localhost:8787/openai/v1 \
+TAVILY_API_KEY=stub TAVILY_API_BASE=http://localhost:8787 \
+npm run trace -- "your idea"          # prints a timestamped trace of every agent
+```
+
+The stub mirrors Groq's documented limits and error formats (429 with `retry-after`, 413, `json_validate_failed`) and can inject failures (`STUB_FAIL`, `STUB_429_ONCE`, `STUB_JSON_FAIL`, `STUB_NO_HEADERS`). Its answers are fixed sample content. With real keys, `npm run trace -- "idea"` runs against your configured providers.
 
 ### Structured output
 
