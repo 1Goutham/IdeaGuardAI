@@ -54,7 +54,7 @@ function summary(v: IdeaVersion): string {
   return `IdeaGuard ${parts.length ? `${parts.join(", ")} and ${last}` : last}.`;
 }
 
-export function PipelineTrace({ projectId, version, isRunning }: { projectId: string; version: IdeaVersion; isRunning: boolean }) {
+export function PipelineTrace({ projectId, version, isRunning, readOnly = false }: { projectId: string; version: IdeaVersion; isRunning: boolean; readOnly?: boolean }) {
   const { retryStage } = useProjectActions();
   const line = summary(version);
   const totals = STAGE_IDS.reduce(
@@ -88,9 +88,11 @@ export function PipelineTrace({ projectId, version, isRunning }: { projectId: st
                 {s.status === "error" && (
                   <>
                     <span className="text-danger">Unavailable</span>
-                    <TextAction onClick={() => retryStage(projectId, version.id, id)} disabled={isRunning}>
-                      <IconRetry size={12} /> Retry
-                    </TextAction>
+                    {!readOnly && (
+                      <TextAction onClick={() => retryStage(projectId, version.id, id)} disabled={isRunning}>
+                        <IconRetry size={12} /> Retry
+                      </TextAction>
+                    )}
                   </>
                 )}
                 {(s.status === "running" || s.status === "queued") && (s.note ?? "In progress")}

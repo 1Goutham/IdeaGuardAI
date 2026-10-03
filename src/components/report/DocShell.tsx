@@ -20,13 +20,22 @@ interface Props<T> {
 
 /** Shared frame for generated documents: not-yet, generating, and ready with export actions. */
 export function DocShell<T>({ kind, index, title, description, includes, toMarkdown, children }: Props<T>) {
-  const { project, version, isRunning, isGenerating } = useWorkspace();
+  const { project, version, isRunning, isGenerating, readOnly } = useWorkspace();
   const { generateDoc } = useProjectActions();
   const doc = version[kind] as GeneratedDoc<T> | undefined;
   const generating = isGenerating(kind);
   const ready = !!version.analysis.strategy && version.stages.strategy.status === "done";
   const run = () => generateDoc(project.id, version.id, kind);
   const filename = `${slugify(project.title)}-${kind}-v${version.number}.md`;
+
+  if (!doc && readOnly) {
+    return (
+      <article className="animate-fade">
+        <SectionHeader index={index} title={title} description={description} />
+        <p className="border-y border-dashed border-line-2 py-10 text-[16px] text-ink">○ Not generated for this report.</p>
+      </article>
+    );
+  }
 
   if (!doc || generating) {
     return (
@@ -91,9 +100,11 @@ export function DocShell<T>({ kind, index, title, description, includes, toMarkd
               Copy
             </TextAction>
             <TextAction onClick={() => downloadText(filename, toMarkdown(doc.data))}>Download .md</TextAction>
-            <TextAction onClick={run} disabled={isRunning}>
-              Regenerate
-            </TextAction>
+            {!readOnly && (
+              <TextAction onClick={run} disabled={isRunning}>
+                Regenerate
+              </TextAction>
+            )}
           </>
         }
       />

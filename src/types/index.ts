@@ -134,6 +134,8 @@ export interface StageTrace {
   inputTokens: number;
   outputTokens: number;
   reasoning?: string;
+  /** Citations the model made to sources that weren't retrieved (or don't name the product), removed in code. */
+  citationsDropped?: number;
 }
 
 export interface StageState {
@@ -186,6 +188,20 @@ export interface IdeaVersion {
   experiments: Record<string, ExperimentState>;
   prd?: GeneratedDoc<PrdOutput>;
   blueprint?: GeneratedDoc<BlueprintOutput>;
+  /** A durable background run in progress, and how far this browser has read its events. */
+  run?: { id: string; cursor: number; startedAt: string };
+  /** Present once the report has been shared as a read-only link. */
+  share?: ShareRecord;
+}
+
+export interface ShareRecord {
+  id: string;
+  /** Secret that lets this browser update or revoke the link. */
+  token: string;
+  url: string;
+  sharedAt: string;
+  /** The version's updatedAt-equivalent when last published, to detect changes. */
+  publishedHash: string;
 }
 
 export interface Project {

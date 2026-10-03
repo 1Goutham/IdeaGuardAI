@@ -1,4 +1,4 @@
-import type { StageEvent } from "@/lib/agents/orchestrator";
+import type { StageEvent } from "@/lib/agents/events";
 import type { AiError, AiResponse } from "./contracts";
 import type { AnalyseRequest, DocumentRequest } from "./requests";
 
@@ -15,7 +15,36 @@ async function errorFrom(res: Response): Promise<AiError> {
   return { code: "upstream", message: `IdeaGuard returned ${res.status}.`, retryable: res.status >= 500 };
 }
 
-/** Streams pipeline events. Resolves when the stream ends; `error` is set if it couldn't start or broke. */
+/** Reads an NDJSON body line by line. Returns an error only when the connection broke. */
+async function readLines(res: Response, onLine: (value: unknown) => void): Promise<AiError | null> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+        try {
+          onLine(JSON.parse(line));
+        } catch {
+          /* ignore a malformed line */
+        }
+      }
+    }
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") return { code: "network", message: "Stopped.", retryable: true };
+    return { code: "network", message: "The connection dropped during analysis.", retryable: true };
+  }
+  return null;
+}
+
+/** Inline runner: streams pipeline events from one request. */
 export async function streamAnalysis(
   body: AnalyseRequest,
   onEvent: (e: StageEvent) => void,
@@ -28,35 +57,71 @@ export async function streamAnalysis(
     return { error: (e as Error)?.name === "AbortError" ? { code: "network", message: "Stopped.", retryable: true } : offline };
   }
   if (!res.ok || !res.body) return { error: await errorFrom(res) };
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
   let sawDone = false;
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let nl: number;
-      while ((nl = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, nl).trim();
-        buffer = buffer.slice(nl + 1);
-        if (!line) continue;
-        try {
-          const event = JSON.parse(line) as StageEvent;
-          if (event.type === "done") sawDone = true;
-          onEvent(event);
-        } catch {
-          /* ignore a malformed line */
-        }
-      }
-    }
-  } catch (e) {
-    if ((e as Error)?.name === "AbortError") return { error: { code: "network", message: "Stopped.", retryable: true } };
-    return { error: { code: "network", message: "The connection dropped during analysis.", retryable: true } };
-  }
+  const broken = await readLines(res, (v) => {
+    const event = v as StageEvent;
+    if (event.type === "done") sawDone = true;
+    onEvent(event);
+  });
+  if (broken) return { error: broken };
   return { error: sawDone ? null : { code: "network", message: "The analysis ended early. The server may have timed out.", retryable: true } };
+}
+
+/* Durable runner ------------------------------------------------------ */
+
+export async function startRun(body: AnalyseRequest): Promise<AiResponse<{ runId: string }>> {
+  try {
+    const res = await fetch("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok) return { ok: false, error: await errorFrom(res) };
+    return (await res.json()) as AiResponse<{ runId: string }>;
+  } catch {
+    return { ok: false, error: offline };
+  }
+}
+
+/**
+ * Reads a durable run's events from `from`. Resolves when the stream ends:
+ * `done` if the run finished, otherwise the caller decides whether to reconnect.
+ */
+export async function followRun(
+  runId: string,
+  from: number,
+  onEvent: (e: StageEvent, index: number) => void,
+  signal?: AbortSignal,
+): Promise<{ done: boolean; error: AiError | null; notFound?: boolean }> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/runs/${encodeURIComponent(runId)}/events?from=${from}`, { signal, cache: "no-store" });
+  } catch (e) {
+    return { done: false, error: (e as Error)?.name === "AbortError" ? { code: "network", message: "Stopped.", retryable: true } : offline };
+  }
+  if (res.status === 404) return { done: false, error: await errorFrom(res), notFound: true };
+  if (!res.ok || !res.body) return { done: false, error: await errorFrom(res) };
+  let done = false;
+  const broken = await readLines(res, (v) => {
+    const { i, e } = v as { i: number; e: StageEvent };
+    if (e.type === "done") done = true;
+    onEvent(e, i);
+  });
+  return { done, error: broken };
+}
+
+export async function runStatus(runId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/runs/${encodeURIComponent(runId)}`, { cache: "no-store" });
+    if (!res.ok) return res.status === 404 ? "missing" : null;
+    return ((await res.json()) as AiResponse<{ status: string }> & { data?: { status: string } }).data?.status ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cancelRun(runId: string): Promise<void> {
+  try {
+    await fetch(`/api/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
+  } catch {
+    /* the run may already be finished */
+  }
 }
 
 export async function generateDocument<T>(body: DocumentRequest): Promise<AiResponse<{ data: T; engine: string }>> {
@@ -74,6 +139,16 @@ export interface EngineInfo {
   fallbacks: string[];
   research: string | null;
   development: boolean;
+  /** "durable": background workflow runs; "inline": one streaming request. */
+  runner: "durable" | "inline";
+}
+
+let engineOnce: Promise<EngineInfo | null> | null = null;
+
+/** Cached for the page's lifetime. */
+export function engineInfo(): Promise<EngineInfo | null> {
+  engineOnce ??= fetchEngine();
+  return engineOnce;
 }
 
 export async function fetchEngine(): Promise<EngineInfo | null> {
@@ -82,5 +157,21 @@ export async function fetchEngine(): Promise<EngineInfo | null> {
     return res.ok ? ((await res.json()) as EngineInfo) : null;
   } catch {
     return null;
+  }
+}
+
+export interface ConnectionCheck {
+  providers: { id: string; label: string; model: string | null; ok: boolean; structured: boolean; latencyMs: number; error?: { code: string; message: string } }[];
+  research: { label: string; ok: boolean; latencyMs: number; results: number; error?: string } | null;
+  checkedAt: string;
+}
+
+export async function checkConnection(): Promise<AiResponse<ConnectionCheck>> {
+  try {
+    const res = await fetch("/api/engine/check", { method: "POST" });
+    if (!res.ok) return { ok: false, error: await errorFrom(res) };
+    return (await res.json()) as AiResponse<ConnectionCheck>;
+  } catch {
+    return { ok: false, error: offline };
   }
 }

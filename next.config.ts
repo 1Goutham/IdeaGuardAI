@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -6,4 +7,5 @@ const nextConfig: NextConfig = {
   agentRules: false,
 };
 
-export default nextConfig;
+// Enables "use workflow" / "use step" for durable background analysis runs.
+export default withWorkflow(nextConfig);

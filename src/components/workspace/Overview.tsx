@@ -15,16 +15,16 @@ import { PipelineTrace } from "./PipelineTrace";
 import { useWorkspace } from "./WorkspaceContext";
 
 export function Overview() {
-  const { project, version, isRunning, openRefine, href } = useWorkspace();
+  const { project, version, isRunning, openRefine, href, readOnly } = useWorkspace();
   const { retryStage, analyse } = useProjectActions();
   const a = version.analysis;
   const complete = isComplete(version.stages);
   const failed = STAGE_IDS.filter((id) => version.stages[id].status === "error");
 
-  if (isRunning || (!complete && !failed.length && !a.strategy)) return <AnalysisProgress />;
+  if (!readOnly && (isRunning || (!complete && !failed.length && !a.strategy))) return <AnalysisProgress />;
 
   const u = a.understand;
-  if (!u) return <AnalysisProgress />;
+  if (!u) return readOnly ? null : <AnalysisProgress />;
   const tally = tallyEvidence(a);
   const s = a.strategy;
   const critic = a.critic;
@@ -54,7 +54,7 @@ export function Overview() {
             <p className="text-[15px] text-ink">
               {failed.length === 1 ? "One step" : `${failed.length} steps`} didn&apos;t complete. The rest of the report is below.
             </p>
-            {failed.length > 1 && (
+            {failed.length > 1 && !readOnly && (
               <Button size="sm" variant="primary" onClick={() => analyse(project.id, version.id)} disabled={isRunning}>
                 <IconRetry size={14} /> Resume analysis
               </Button>
@@ -66,9 +66,11 @@ export function Overview() {
                 <StatusDot status="error" />
                 <span className="text-ink-2">{STAGE_COPY[id].agent}</span>
                 <span className="text-ink-3">{version.stages[id].error}</span>
-                <TextAction onClick={() => retryStage(project.id, version.id, id)} disabled={isRunning}>
-                  <IconRetry size={12} /> Retry
-                </TextAction>
+                {!readOnly && (
+                  <TextAction onClick={() => retryStage(project.id, version.id, id)} disabled={isRunning}>
+                    <IconRetry size={12} /> Retry
+                  </TextAction>
+                )}
               </li>
             ))}
           </ul>
@@ -86,9 +88,11 @@ export function Overview() {
           <p className="display mt-5 max-w-3xl text-[28px] leading-[1.12] text-ink md:text-[36px]">{s.headline}</p>
           <p className="measure mt-5 text-[15px] leading-relaxed text-ink-2">{s.reasoning}</p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Button variant="primary" size="sm" onClick={() => openRefine(s.refinedIdea)}>
-              Refine with this in mind <IconArrowRight size={14} className="nudge" />
-            </Button>
+            {!readOnly && (
+              <Button variant="primary" size="sm" onClick={() => openRefine(s.refinedIdea)}>
+                Refine with this in mind <IconArrowRight size={14} className="nudge" />
+              </Button>
+            )}
             <Link href={href("mvp")} className="group inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-ink-2 hover:text-ink">
               <span className="link-underline">See the MVP</span>
             </Link>
@@ -176,7 +180,7 @@ export function Overview() {
       )}
 
       <Block title="How this was produced" id="engine">
-        <PipelineTrace projectId={project.id} version={version} isRunning={isRunning} />
+        <PipelineTrace projectId={project.id} version={version} isRunning={isRunning} readOnly={readOnly} />
       </Block>
     </article>
   );

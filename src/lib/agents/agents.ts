@@ -2,7 +2,7 @@ import "server-only";
 import { generateStructured, type CallTrace } from "@/lib/ai/engine";
 import type { AiResponse } from "@/lib/ai/contracts";
 import type { ReasoningEffort } from "@/lib/ai/providers/types";
-import { groundItems, verifyCompetitor } from "@/lib/research/grounding";
+import { groundItems, verifyCompetitor, type GroundingTally } from "@/lib/research/grounding";
 import {
   BlueprintSchema,
   CompetitorSchema,
@@ -66,7 +66,7 @@ export interface AgentContext {
   onWait?: (reason: "capacity" | "rate_limited", ms?: number) => void;
 }
 
-export type AgentResult<T> = AiResponse<{ value: T; trace: CallTrace }>;
+export type AgentResult<T> = AiResponse<{ value: T; trace: CallTrace; /** Invented citations removed by grounding. */ citationsDropped?: number }>;
 
 /** Output and reasoning budgets per agent: enough room, no waste of a free-tier token budget. */
 const BUDGET: Record<string, { out: number; reasoning: ReasoningEffort }> = {
@@ -81,7 +81,7 @@ const BUDGET: Record<string, { out: number; reasoning: ReasoningEffort }> = {
   blueprint: { out: 5000, reasoning: "medium" },
 };
 
-function run<T>(tag: string, ctx: Pick<AgentContext, "deadline" | "signal" | "onWait">, schema: Parameters<typeof generateStructured<T>>[0]["schema"], prompt: string, temperature = 0.3) {
+function call<T>(tag: string, ctx: Pick<AgentContext, "deadline" | "signal" | "onWait">, schema: Parameters<typeof generateStructured<T>>[0]["schema"], prompt: string, temperature = 0.3) {
   return generateStructured<T>({
     tag,
     schema,
@@ -96,8 +96,10 @@ function run<T>(tag: string, ctx: Pick<AgentContext, "deadline" | "signal" | "on
   });
 }
 
-function map<A, B>(res: AgentResult<A>, fn: (a: A) => B): AgentResult<B> {
-  return res.ok ? { ok: true, data: { value: fn(res.data.value), trace: res.data.trace } } : res;
+function map<A, B>(res: AgentResult<A>, fn: (a: A) => B, tally?: GroundingTally): AgentResult<B> {
+  if (!res.ok) return res;
+  const value = fn(res.data.value);
+  return { ok: true, data: { value, trace: res.data.trace, ...(tally ? { citationsDropped: tally.dropped } : {}) } };
 }
 
 const items = (ctx: AgentContext) => ctx.sources?.items ?? [];
@@ -105,7 +107,7 @@ const items = (ctx: AgentContext) => ctx.sources?.items ?? [];
 /* 01 Idea Analyst ----------------------------------------------------- */
 
 export async function understand(ctx: AgentContext): Promise<AgentResult<UnderstandOutput>> {
-  const res = await run<UnderstandOutput>(
+  const res = await call<UnderstandOutput>(
     "understand",
     ctx,
     UnderstandSchema,
@@ -142,7 +144,7 @@ export async function research(ctx: AgentContext): Promise<AgentResult<ResearchR
   const live = all.length > 0;
   // Synthesis sees most sources, but short.
   const shown = pickSources(all, { max: 18, snippet: 320 });
-  const res = await run<ResearchOutput>(
+  const res = await call<ResearchOutput>(
     "research",
     ctx,
     ResearchSchema,
@@ -158,15 +160,16 @@ export async function research(ctx: AgentContext): Promise<AgentResult<ResearchR
     ),
     0.2,
   );
+  const tally: GroundingTally = { dropped: 0 };
   return map(res, (v) => ({
     ...v,
-    findings: groundItems(v.findings, all),
+    findings: groundItems(v.findings, all, tally),
     sources: all,
     mode: live ? "live" : "offline",
     provider: ctx.sources?.provider ?? null,
     queries: ctx.sources?.queries ?? [],
     researchedAt: new Date().toISOString(),
-  }));
+  }), tally);
 }
 
 /* 03 Competitor Agent ------------------------------------------------- */
@@ -175,7 +178,7 @@ export async function competitors(ctx: AgentContext): Promise<AgentResult<Compet
   const all = items(ctx);
   const plan = ctx.analysis.understand?.searchPlan.competitors ?? [];
   const shown = pickSources(all, { queries: plan, max: 10, snippet: 380 });
-  const res = await run<CompetitorOutput>(
+  const res = await call<CompetitorOutput>(
     "competitors",
     ctx,
     CompetitorSchema,
@@ -193,18 +196,19 @@ export async function competitors(ctx: AgentContext): Promise<AgentResult<Compet
     ),
     0.2,
   );
+  const tally: GroundingTally = { dropped: 0 };
   return map(res, (v) => {
     // Verify against every gathered source, not only those shown, so a correct name is never penalised.
-    const verified = v.competitors.map((c) => verifyCompetitor(c, all));
+    const verified = v.competitors.map((c) => verifyCompetitor(c, all, tally));
     const names = new Set([...verified.map((c) => c.name.toLowerCase()), "your idea"]);
     return { ...v, competitors: verified, placements: v.axes ? v.placements.filter((p) => names.has(p.name.toLowerCase())) : [] };
-  });
+  }, tally);
 }
 
 /* 04 Feasibility Agent ------------------------------------------------ */
 
 export async function feasibility(ctx: AgentContext): Promise<AgentResult<FeasibilityOutput>> {
-  return run<FeasibilityOutput>(
+  return call<FeasibilityOutput>(
     "feasibility",
     ctx,
     FeasibilitySchema,
@@ -224,7 +228,7 @@ export async function risks(ctx: AgentContext): Promise<AgentResult<RiskResult>>
   const all = items(ctx);
   const relevant = ctx.analysis.research?.findings.filter((f) => ["regulation", "complaints", "market"].includes(f.topic)).flatMap((f) => f.sourceIds) ?? [];
   const shown = pickSources(all, { ids: relevant, queries: ctx.analysis.understand?.searchPlan.context, max: 6, snippet: 240 });
-  const res = await run<RiskOutput>(
+  const res = await call<RiskOutput>(
     "risks",
     ctx,
     RiskSchema,
@@ -238,13 +242,14 @@ export async function risks(ctx: AgentContext): Promise<AgentResult<RiskResult>>
       sourcesBlock(shown, 240),
     ),
   );
-  return map(res, (v) => ({ risks: groundItems(v.risks, all), regulations: groundItems(v.regulations, all) }));
+  const tally: GroundingTally = { dropped: 0 };
+  return map(res, (v) => ({ risks: groundItems(v.risks, all, tally), regulations: groundItems(v.regulations, all, tally) }), tally);
 }
 
 /* 06 Critic ------------------------------------------------------------ */
 
 export async function critic(ctx: AgentContext): Promise<AgentResult<CriticOutput>> {
-  const res = await run<CriticOutput>(
+  const res = await call<CriticOutput>(
     "critic",
     ctx,
     CriticSchema,
@@ -282,7 +287,7 @@ export async function strategy(ctx: AgentContext): Promise<AgentResult<StrategyR
   const cited = new Set(ctx.analysis.research?.findings.flatMap((f) => f.sourceIds) ?? []);
   const shown = pickSources(all, { ids: [...cited], max: 12, snippet: 0 });
   const firstRead = ctx.analysis.understand?.signals.map((s) => `${s.key}: ${s.level}`).join(", ") ?? "";
-  const res = await run<StrategyOutput>(
+  const res = await call<StrategyOutput>(
     "strategy",
     ctx,
     StrategySchema,
@@ -306,11 +311,12 @@ export async function strategy(ctx: AgentContext): Promise<AgentResult<StrategyR
     ),
     0.4,
   );
+  const tally: GroundingTally = { dropped: 0 };
   return map(res, (v) => {
     const byKey = new Map(v.signals.map((s) => [s.key, s]));
     const ordered = SIGNAL_KEYS.map((k) => byKey.get(k)).filter((s): s is NonNullable<typeof s> => !!s);
-    return { ...v, signals: groundItems(ordered, all) };
-  });
+    return { ...v, signals: groundItems(ordered, all, tally) };
+  }, tally);
 }
 
 /* Documents ------------------------------------------------------------- */
@@ -324,7 +330,7 @@ function strategyBrief(a: Analysis): string {
 const docDeadline = () => ({ deadline: Date.now() + 110_000 });
 
 export async function prd(idea: string, a: Analysis): Promise<AgentResult<PrdOutput>> {
-  return run<PrdOutput>(
+  return call<PrdOutput>(
     "prd",
     docDeadline(),
     PrdSchema,
@@ -342,7 +348,7 @@ export async function prd(idea: string, a: Analysis): Promise<AgentResult<PrdOut
 }
 
 export async function blueprint(idea: string, a: Analysis): Promise<AgentResult<BlueprintOutput>> {
-  return run<BlueprintOutput>(
+  return call<BlueprintOutput>(
     "blueprint",
     docDeadline(),
     BlueprintSchema,
@@ -355,4 +361,24 @@ export async function blueprint(idea: string, a: Analysis): Promise<AgentResult<
       strategyBrief(a),
     ),
   );
+}
+
+/** Dispatch by stage, so runners don't need to know agent names. */
+export function run(stage: StageId, ctx: AgentContext): Promise<AgentResult<unknown>> {
+  switch (stage) {
+    case "understand":
+      return understand(ctx);
+    case "research":
+      return research(ctx);
+    case "competitors":
+      return competitors(ctx);
+    case "feasibility":
+      return feasibility(ctx);
+    case "risks":
+      return risks(ctx);
+    case "critic":
+      return critic(ctx);
+    case "strategy":
+      return strategy(ctx);
+  }
 }

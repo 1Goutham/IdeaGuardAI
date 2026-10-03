@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchEngine, type EngineInfo } from "@/lib/ai/client";
-
-let cached: Promise<EngineInfo | null> | null = null;
+import { engineInfo, type EngineInfo } from "@/lib/ai/client";
 
 /** Configured model and research providers, fetched once per page load. */
 export function useEngine(): { info: EngineInfo | null; loading: boolean } {
@@ -11,8 +9,7 @@ export function useEngine(): { info: EngineInfo | null; loading: boolean } {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let alive = true;
-    cached ??= fetchEngine();
-    cached.then((i) => {
+    engineInfo().then((i) => {
       if (!alive) return;
       setInfo(i);
       setLoading(false);

@@ -14,5 +14,6 @@ export async function GET() {
     fallbacks: active.slice(1),
     research: researchProviderLabel(),
     development: active.includes("mock"),
+    runner: process.env.IDEAGUARD_RUNNER === "inline" ? "inline" : "durable",
   });
 }

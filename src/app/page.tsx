@@ -2,6 +2,7 @@ import { EngineStatus } from "@/components/home/EngineStatus";
 import { IdeaComposer } from "@/components/home/IdeaComposer";
 import { PipelineStrip } from "@/components/home/PipelineStrip";
 import { ProjectList } from "@/components/home/ProjectList";
+import Link from "next/link";
 import { Logo, ThemeToggle } from "@/components/ui";
 
 const VERBS = ["Research", "Stress-test", "Validate", "Build"];
@@ -40,6 +41,11 @@ export default function Home() {
         <div className="animate-rise max-w-[880px]" style={{ animationDelay: "200ms" }}>
           <IdeaComposer />
           <EngineStatus className="mt-6 md:hidden" />
+          {process.env.NEXT_PUBLIC_EXAMPLE_REPORT && (
+            <Link href={process.env.NEXT_PUBLIC_EXAMPLE_REPORT} className="mt-5 inline-block text-[13.5px] text-ink-2 hover:text-ink">
+              <span className="link-underline">Not sure yet? See an example report</span> →
+            </Link>
+          )}
         </div>
 
         <div className="mt-24 space-y-20">
@@ -50,7 +56,12 @@ export default function Home() {
 
       <footer className="mx-auto max-w-[1200px] px-5 md:px-10">
         <div className="flex flex-col gap-2 border-t border-line py-6 text-[12px] text-ink-3 md:flex-row md:items-center md:justify-between">
-          <p>Local-first. Projects are stored in this browser only.</p>
+          <p>
+            Local-first. Projects are stored in this browser only.{" "}
+            <Link href="/how-it-works" className="link-underline text-ink-2">
+              How it works
+            </Link>
+          </p>
           <p>
             IdeaGuard · designed and built by{" "}
             <a href="https://github.com/1Goutham" target="_blank" rel="noreferrer" className="link-underline text-ink">
