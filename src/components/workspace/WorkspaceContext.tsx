@@ -10,6 +10,8 @@ export interface WorkspaceValue {
   isGenerating: (kind: "prd" | "blueprint") => boolean;
   openRefine: (prefill?: string) => void;
   href: (slug: string) => string;
+  /** A shared report: everything is visible, nothing is editable. */
+  readOnly: boolean;
 }
 
 const Ctx = createContext<WorkspaceValue | null>(null);

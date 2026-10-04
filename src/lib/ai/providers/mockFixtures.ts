@@ -62,6 +62,8 @@ const signalsFirst = [
 ];
 
 export const MOCK_OUTPUTS: Record<string, unknown> = {
+  check: { status: "ok", sum: 5 },
+  judge: { specificity: 3, honesty: 4, actionability: 4, weakest: "Development fixture: no real grading happened." },
   understand: {
     title: "Internship Matching",
     oneLiner: "An AI assistant that recommends internships to university students from their CV and interests, and helps them apply.",

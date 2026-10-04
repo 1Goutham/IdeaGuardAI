@@ -8,11 +8,14 @@ const STATUS: Record<AiError["code"], number> = {
   not_configured: 503,
   invalid_request: 400,
   rate_limited: 429,
+  too_large: 413,
   timeout: 504,
   upstream: 502,
   blocked: 422,
   empty: 502,
   malformed: 502,
+  truncated: 502,
+  unavailable: 424,
   network: 502,
 };
 

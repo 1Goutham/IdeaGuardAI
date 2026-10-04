@@ -16,5 +16,5 @@ export async function POST(req: Request) {
     return respond({ ok: false, error: { code: "invalid_request", message: "Finish the analysis before generating documents.", retryable: false } });
   }
   const res = body.kind === "prd" ? await prd(body.idea, analysis) : await blueprint(body.idea, analysis);
-  return respond(res.ok ? { ok: true, data: { data: res.data.value, engine: res.data.engine } } : res);
+  return respond(res.ok ? { ok: true, data: { data: res.data.value, engine: res.data.trace.engine } } : res);
 }

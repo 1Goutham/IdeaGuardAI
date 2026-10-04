@@ -5,13 +5,33 @@ import { STAGE_IDS, type Analysis, type StageId, type StageMap } from "@/types";
  * browser (progress UI, retry). No server-only imports here.
  *
  *   understand
- *       ├── research (search + synthesis)
- *       │     ├── feasibility
- *       │     └── risks
- *       └── competitors (needs research's sources)
- *                       └── critic ── strategy
+ *       │
+ *   research ─────────────┬──────────────┐
+ *       │                 │              │
+ *   competitors      feasibility       risks        (independent, concurrent)
+ *       └─────────────────┼──────────────┘
+ *                      critic
+ *                         │
+ *                     strategy
+ *
+ * Only the Idea Analyst is a hard requirement. Everything else is an input an
+ * agent uses when it exists; when it doesn't, the agent runs anyway and is
+ * told explicitly what is missing. The critic and strategist need a minimum
+ * number of upstream inputs so a report is never built on almost nothing.
  */
 
+/** Inputs without which a stage cannot run at all. */
+export const REQUIRES: Record<StageId, StageId[]> = {
+  understand: [],
+  research: ["understand"],
+  competitors: ["understand"],
+  feasibility: ["understand"],
+  risks: ["understand"],
+  critic: ["understand"],
+  strategy: ["understand"],
+};
+
+/** Everything a stage consumes when available (required + optional). */
 export const DEPENDS_ON: Record<StageId, StageId[]> = {
   understand: [],
   research: ["understand"],
@@ -22,17 +42,22 @@ export const DEPENDS_ON: Record<StageId, StageId[]> = {
   strategy: ["understand", "research", "competitors", "feasibility", "risks", "critic"],
 };
 
-export const STAGE_COPY: Record<StageId, { running: string; done: string; agent: string }> = {
-  understand: { running: "Understanding the idea", done: "Understood the idea", agent: "Idea Analyst" },
-  research: { running: "Researching the market", done: "Researched the market", agent: "Research Agent" },
-  competitors: { running: "Mapping competitors", done: "Mapped competitors", agent: "Competitor Agent" },
-  feasibility: { running: "Assessing feasibility", done: "Assessed feasibility", agent: "Feasibility Agent" },
-  risks: { running: "Reviewing risks and governance", done: "Reviewed risks and governance", agent: "Risk & Governance Agent" },
-  critic: { running: "Stress-testing assumptions", done: "Stress-tested assumptions", agent: "Critic" },
-  strategy: { running: "Building the product strategy", done: "Built the product strategy", agent: "Product Strategist" },
+/** How many optional inputs must have succeeded for the stage to be worth running. */
+export const MIN_OPTIONAL: Partial<Record<StageId, number>> = { critic: 2, strategy: 3 };
+
+export const optionalInputs = (stage: StageId) => DEPENDS_ON[stage].filter((d) => !REQUIRES[stage].includes(d));
+
+export const STAGE_COPY: Record<StageId, { running: string; done: string; agent: string; label: string; subject: string }> = {
+  understand: { running: "Understanding the idea", done: "Understood the idea", agent: "Idea Analyst", label: "Idea analysis", subject: "idea analysis" },
+  research: { running: "Researching the market", done: "Researched the market", agent: "Research Agent", label: "Research", subject: "market research" },
+  competitors: { running: "Mapping competitors", done: "Mapped competitors", agent: "Competitor Agent", label: "Competition", subject: "competitor analysis" },
+  feasibility: { running: "Assessing feasibility", done: "Assessed feasibility", agent: "Feasibility Agent", label: "Feasibility", subject: "feasibility assessment" },
+  risks: { running: "Reviewing risks and governance", done: "Reviewed risks and governance", agent: "Risk & Governance Agent", label: "Risk & governance", subject: "risk review" },
+  critic: { running: "Stress-testing assumptions", done: "Stress-tested assumptions", agent: "Critic", label: "Stress test", subject: "stress test" },
+  strategy: { running: "Building the product strategy", done: "Built the product strategy", agent: "Product Strategist", label: "Product strategy", subject: "product strategy" },
 };
 
-/** A stage and everything that transitively depends on it, in pipeline order. */
+/** A stage and everything that transitively consumes it, in pipeline order. */
 export function withDownstream(stage: StageId): StageId[] {
   const out = new Set<StageId>([stage]);
   let grew = true;
@@ -62,9 +87,9 @@ export function isComplete(stages: StageMap): boolean {
 }
 
 /**
- * What to run to retry one stage: any upstream stage without a result, the
- * stage itself, and everything downstream of it (which depended on the old
- * result).
+ * What to run to retry one stage: upstream stages it consumes that have no
+ * result, the stage itself, and everything downstream of it (which was built
+ * on the old result).
  */
 export function retryPlan(stage: StageId, stages: StageMap, analysis: Analysis): StageId[] {
   const need = new Set<StageId>(withDownstream(stage));

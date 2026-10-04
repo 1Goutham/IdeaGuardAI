@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { aiError } from "../contracts";
-import type { CompletionResult, Provider, ProviderStatus } from "./types";
+import type { Capabilities, CompletionResult, Provider, ProviderStatus } from "./types";
 
 /**
  * Anthropic Claude through the official SDK. Streams the response (analysis
@@ -33,6 +33,8 @@ export const anthropic: Provider = {
   label: "Anthropic Claude",
   signupUrl: SIGNUP,
   configured: () => !!process.env.ANTHROPIC_API_KEY,
+  // JSON is requested in the prompt and validated by the engine.
+  capabilities: (): Capabilities => ({ jsonMode: false, reasoningEffort: false }),
 
   async complete(opts): Promise<CompletionResult> {
     if (!process.env.ANTHROPIC_API_KEY) return aiError("not_configured", "Claude is not configured.");
@@ -48,7 +50,7 @@ export const anthropic: Provider = {
           ...(level ? { output_config: { effort: level } } : {}),
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",
-        })
+        }, { signal: opts.signal })
         .finalMessage();
 
       if (message.stop_reason === "refusal") return { ...aiError("blocked", "Claude declined this request. Try rephrasing the idea."), model: m };
@@ -56,14 +58,17 @@ export const anthropic: Provider = {
         .map((block) => (block.type === "text" ? block.text : ""))
         .join("")
         .trim();
+      const usage = { input: message.usage.input_tokens, output: message.usage.output_tokens };
+      if (message.stop_reason === "max_tokens") return { ...aiError("truncated", "Claude stopped at the output limit before finishing.", true), model: m, usage };
       if (!text) return { ...aiError("empty", "Claude came back empty.", true), model: m };
-      return { ok: true, data: text, model: message.model || m };
+      return { ok: true, data: text, model: message.model || m, usage, finish: message.stop_reason ?? undefined };
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) return { ...aiError("rate_limited", "Claude is rate-limited right now.", true), model: m };
       if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
         return { ...aiError("upstream", "Claude rejected the API key."), model: m };
       }
       if (e instanceof Anthropic.NotFoundError) return { ...aiError("upstream", `Claude can't find the model "${m}".`), model: m };
+      if (e instanceof Anthropic.APIUserAbortError) return { ...aiError("network", "Stopped."), model: m };
       if (e instanceof Anthropic.APIConnectionTimeoutError) return { ...aiError("timeout", "Claude took too long to respond.", true), model: m };
       if (e instanceof Anthropic.APIConnectionError) return { ...aiError("network", "Couldn't reach Claude.", true), model: m };
       if (e instanceof Anthropic.APIError) {

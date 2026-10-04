@@ -21,7 +21,8 @@ npm run dev
 To work on the interface without any keys, set `AI_PROVIDERS=mock` and `RESEARCH_PROVIDER=mock`. The mock engine returns fixed sample output about fictional companies with `example.com` sources, and the app labels it as a development engine everywhere it appears.
 
 ```bash
-npm run test        # vitest: schemas, grounding, diff, pipeline, orchestrator
+npm run test        # vitest: schemas, grounding, graph, orchestrator, engine, shares, eval metrics, stub integration
+npm run eval        # quality evaluation on golden ideas (see "Evaluation")
 npm run typecheck
 npm run lint
 npm run build
@@ -34,7 +35,10 @@ npm run build
 3. Add environment variables (Settings → Environment Variables): at least one model key, e.g. `GEMINI_API_KEY`, and optionally `TAVILY_API_KEY` for sourced research. Don't set the `mock` options in production.
 4. Node.js 20.9 or newer is required (Settings → Build and Deployment → Node.js Version).
 
-A full analysis makes several model calls in one request, so `/api/analyse` allows up to 300 seconds. That works on every plan with Fluid Compute, which is on by default for new projects.
+5. **Shareable links (optional):** Storage → Create → *Upstash for Redis* (free tier), then connect it to the project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`; redeploy. Without it, the Share dialog says sharing isn't set up and everything else works.
+6. After deploying, press **Test** next to the engine status on the home page. It makes one tiny request to every configured provider and one search, and reports which work, how fast, and whether structured output passes.
+
+Analyses run as durable background workflows ([Vercel Workflow](https://vercel.com/docs/workflow)): each agent is a persisted, retried step, so a run survives closed tabs, dropped connections and function time limits. Each step allows up to 300 seconds, which works on every plan with Fluid Compute (on by default for new projects). Set `IDEAGUARD_RUNNER=inline` to stream from a single request instead.
 
 ## The workspace
 
@@ -51,6 +55,8 @@ A full analysis makes several model calls in one request, so `/api/analyse` allo
 | PRD · Architecture | Generated on demand from the analysis. Copy or download as Markdown. |
 | Versions | Refine the idea into v2, v3… and compare what changed, word by word. |
 
+**Sharing.** *Share* publishes the current version as a read-only link (`/r/…`) with its own preview image. Viewers see every section, sources and documents, with nothing editable. Experiment notes, other versions and anything else in the browser stay private. The link can be updated when the report changes, or withdrawn; only the browser that created it holds the token to do so (the server stores a hash).
+
 ## Architecture
 
 ```
@@ -58,9 +64,14 @@ src/
   app/
     page.tsx                    Landing and idea composer
     p/[id]/…                    Workspace: layout + one route per section
-    api/analyse                 Runs the agent pipeline, streams progress (NDJSON)
+    r/[id]/…                    Shared read-only report, same sections, plus OG image
+    how-it-works                The pipeline and guardrails, for readers
+    api/runs                    Start a durable run; /[id]/events streams from a cursor; cancel
+    api/analyse                 Inline runner: one streaming request (IDEAGUARD_RUNNER=inline)
     api/documents               PRD and technical blueprint
-    api/engine                  Which model and research providers are configured
+    api/share                   Publish, update, revoke shared reports (Redis / file KV)
+    api/engine                  Configured providers; /check runs a live connection test
+  workflows/                    The durable analysis workflow and its steps
   components/
     ui/                         Primitives: Button, TextAction, Disclosure, LevelMeter, …
     report/                     Evidence marks, source refs, signals, matrices, maps
@@ -68,9 +79,11 @@ src/
     sections/                   One component per workspace section
     home/                       Composer, project list, pipeline strip
   lib/
-    agents/                     Agent prompts, the orchestrator, the pipeline graph
+    agents/                     Agent prompts, the graph scheduler, stage runner, inline orchestrator
+    eval/                       Deterministic quality metrics
     ai/                         Engine (fallback + structured output), providers, API client
     research/                   Search providers, source gathering, citation grounding
+    server/                     KV store and shared-report storage
     schemas/                    Zod contracts for every agent
     scoring/                    Signal semantics and the evidence tally
     storage/  store/            Repository interface, local implementation, React store
@@ -85,21 +98,57 @@ The AI is not one prompt. Seven agents run as a dependency graph, not a fixed se
 ```
 understand
     │
-research ─ gather sources ───────────────┐
-    │                                    │
-research ─ synthesis                competitors
-    │                                    │
-    ├─────────────┐                      │
-feasibility     risks                    │
-    └─────────────┴──────────┬───────────┘
-                           critic
-                             │
-                          strategy
+research (gather sources → synthesis)
+    │
+    ├──────────────┬──────────────┐
+competitors   feasibility       risks
+    └──────────────┴──────┬───────┘
+                        critic
+                          │
+                       strategy
 ```
 
-- **Concurrency where the data allows it.** Competitor mapping starts as soon as sources are gathered, in parallel with research synthesis. Feasibility and risk run in parallel. Each stage starts the moment its inputs exist.
-- **Real progress.** `/api/analyse` streams an event for every stage start, search note, completion and failure. The progress UI only changes when the server says something happened.
+- **One scheduler, two runners.** `lib/agents/graph.ts` is a pure scheduler: it decides what can run, with which inputs, and hands the work to an executor. The durable workflow (`workflows/analysis.ts`) runs each agent as a persisted step; the inline runner (`lib/agents/orchestrator.ts`) runs them in one request. Both emit the same events.
+- **Concurrency where the data allows it.** Competition, feasibility and risk run in parallel once research settles. Each stage starts the moment its inputs exist.
+- **Real progress, resumable.** Every stage start, search note, completion and failure is an event. The browser stores how far it has read; after a reload or a dropped connection it reconnects from that cursor and catches up.
 - **Partial failure is normal.** If one agent fails, only the stages that depend on it are blocked. Completed results are kept, and retrying a step re-runs just that step, its failed prerequisites, and what depends on it.
+
+### Reliability on rate-limited models
+
+Free tiers limit tokens per minute (Groq's `openai/gpt-oss-120b`: 8,000 on the base tier). A full analysis uses roughly 17–20K tokens, so the engine is built to work within that rather than fail against it:
+
+- **Compact context.** Each agent receives a digest of earlier results and only the sources relevant to its job (research: 18 trimmed snippets; competition: 10; risk: 6; strategy: titles only). Prompts are 1–3K tokens.
+- **Token budget per provider.** Calls reserve room in a rolling one-minute window, learned from the provider's `x-ratelimit-*` headers. Parallel agents run together when the budget allows and queue when it doesn't, instead of bursting into 429s.
+- **Rate limits are waited out.** A 429 is retried after the provider's `retry-after` (up to three times), and the progress screen says so.
+- **Right-sized output.** Per-agent output limits and `reasoning_effort` (low for extraction, medium for critique and strategy) where the model supports it.
+- **Provider-specific failures are classified.** Groq's `json_validate_failed` and truncated output (`finish_reason: length`) are repairable; a 413 moves to the next provider.
+- **Time budget.** A run stops starting new steps before the serverless limit and marks them paused; *Resume analysis* continues from there.
+
+### Failure isolation
+
+Only the Idea Analyst is a hard requirement. If any other agent fails after its retries, the others continue; the Critic and Strategist run on what exists (with minimums: 2 of 4 inputs for the Critic, 3 of 5 for the Strategist), receive an explicit *UNAVAILABLE INPUTS* note telling them not to fill the gap, and record which inputs were missing. The report marks those sections "built without …", the failed step shows its reason and sanitised technical detail, and *Retry* re-runs just that step and what depends on it.
+
+### Testing the pipeline without keys
+
+```bash
+npm run stub                          # local Groq + Tavily stand-in, enforcing 8K TPM
+GROQ_API_KEY=stub GROQ_API_BASE=http://localhost:8787/openai/v1 \
+TAVILY_API_KEY=stub TAVILY_API_BASE=http://localhost:8787 \
+npm run trace -- "your idea"          # prints a timestamped trace of every agent
+```
+
+The stub mirrors Groq's documented limits and error formats (429 with `retry-after`, 413, `json_validate_failed`) and can inject failures (`STUB_FAIL`, `STUB_429_ONCE`, `STUB_JSON_FAIL`, `STUB_NO_HEADERS`). Its answers are fixed sample content. With real keys, `npm run trace -- "idea"` runs against your configured providers.
+
+### Evaluation
+
+`npm run eval` runs the golden ideas in `evals/ideas.json` (a consumer app, a B2B tool, a regulated health idea, a lending idea, and a deliberately vague one) through the real pipeline with whatever providers are configured, and scores each report without a model in the loop:
+
+- completion (stages done of 7), latency, calls, tokens, repair passes,
+- evidence rate (sourced ÷ labelled statements), citations dropped by grounding, competitor verification rate,
+- generic-phrase density (buzzwords per 1,000 words of generated text),
+- expectation checks per case: e.g. the health idea must surface medical-device regulation; the vague idea must not get "pursue".
+
+`--save-baseline` records a run in `evals/baseline.json`; later runs are compared against it and exit non-zero on a regression, so prompt or model changes can be judged on numbers. `EVAL_JUDGE=1` adds a model-graded rubric (specificity, honesty, actionability, weakest part). Results are written to `evals/results/latest.md`.
 
 ### Structured output
 

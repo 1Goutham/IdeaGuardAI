@@ -29,7 +29,7 @@ export async function POST(req: Request) {
         }
       };
       try {
-        await runAnalysis({ idea: body.idea, stages: body.stages, prior: body.prior as Analysis }, emit);
+        await runAnalysis({ idea: body.idea, stages: body.stages, prior: body.prior as Analysis, signal: req.signal }, emit);
       } finally {
         closed = true;
         controller.close();

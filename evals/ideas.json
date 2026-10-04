@@ -1,0 +1,27 @@
+[
+  {
+    "id": "internships",
+    "idea": "An AI assistant that recommends internships to university students based on their CV and interests, explains why each one fits, and helps them tailor applications.",
+    "expect": { "riskKeywords": ["privacy", "gdpr", "bias", "supply", "listings"], "minCompetitors": 2 }
+  },
+  {
+    "id": "restaurant-costs",
+    "idea": "A tool for independent restaurants that reads supplier invoices, tracks ingredient price changes and tells the owner which menu items have become unprofitable.",
+    "expect": { "riskKeywords": ["accuracy", "ocr", "adoption", "integration", "data"], "minCompetitors": 2 }
+  },
+  {
+    "id": "symptom-triage",
+    "idea": "A chatbot that tells people whether their symptoms need a doctor, urgent care or rest at home, without involving a clinician.",
+    "expect": { "riskKeywords": ["medical device", "fda", "mhra", "liability", "clinical", "regulat"], "stanceIn": ["refine", "rethink"] }
+  },
+  {
+    "id": "micro-loans",
+    "idea": "An app that lets friends lend each other small amounts of money with automatic repayment reminders and interest.",
+    "expect": { "riskKeywords": ["licen", "lending", "regulat", "kyc", "aml", "usury"] }
+  },
+  {
+    "id": "vague",
+    "idea": "Uber for everything, powered by AI.",
+    "expect": { "stanceIn": ["refine", "rethink"] }
+  }
+]

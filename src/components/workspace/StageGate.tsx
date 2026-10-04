@@ -2,7 +2,8 @@
 
 import { STAGE_COPY } from "@/lib/agents/pipeline";
 import { useProjectActions } from "@/lib/store/ProjectsProvider";
-import { Button, IconRetry, StatusDot } from "@/components/ui";
+import { Button, Disclosure, IconRetry, StatusDot } from "@/components/ui";
+import { ErrorDetails } from "./ErrorDetails";
 import { SectionHeader } from "@/components/report/Section";
 import type { Analysis, StageId } from "@/types";
 import { useWorkspace } from "./WorkspaceContext";
@@ -25,7 +26,16 @@ export function StageGate<S extends StageId>({
   const { project, version } = useWorkspace();
   const data = version.analysis[stage];
   const state = version.stages[stage];
-  if (data && state.status === "done") return <>{children(data as NonNullable<Analysis[S]>)}</>;
+  if (data && state.status === "done") {
+    return (
+      <>
+        {state.missingInputs?.length ? (
+          <MissingInputs missing={state.missingInputs} />
+        ) : null}
+        {children(data as NonNullable<Analysis[S]>)}
+      </>
+    );
+  }
   return (
     <article>
       <SectionHeader index={header.index} title={header.title} />
@@ -34,18 +44,50 @@ export function StageGate<S extends StageId>({
   );
 }
 
-export function StageState({ projectId, versionId, stage }: { projectId: string; versionId: string; stage: StageId }) {
-  const { version, isRunning } = useWorkspace();
+export function StageState({
+  projectId,
+  versionId,
+  stage,
+}: {
+  projectId: string;
+  versionId: string;
+  stage: StageId;
+}) {
+  const { version, isRunning, readOnly } = useWorkspace();
   const { retryStage, analyse } = useProjectActions();
   const state = version.stages[stage];
   const copy = STAGE_COPY[stage];
 
+  if (readOnly) {
+    return (
+      <div className="border-y border-dashed border-line-2 py-10">
+        <p className="text-[16px] text-ink">
+          ○{" "}
+          {state.status === "error"
+            ? `${copy.agent} didn\u2019t complete for this report.`
+            : "Not part of this shared report."}
+        </p>
+        <p className="mt-2 max-w-lg text-[14px] leading-relaxed text-ink-3">
+          Nothing has been filled in for the missing step.
+        </p>
+      </div>
+    );
+  }
+
   if (state.status === "running" || state.status === "queued") {
     return (
-      <div className="border-y border-line py-10" aria-live="polite" aria-busy="true">
+      <div
+        className="border-y border-line py-10"
+        aria-live="polite"
+        aria-busy="true"
+      >
         <div className="flex items-center gap-3">
           <StatusDot status={state.status} />
-          <p className="text-[16px] text-ink">{state.status === "running" ? `${copy.running}…` : `Waiting to start: ${copy.running.toLowerCase()}`}</p>
+          <p className="text-[16px] text-ink">
+            {state.status === "running"
+              ? `${copy.running}…`
+              : `Waiting to start: ${copy.running.toLowerCase()}`}
+          </p>
         </div>
         <p className="mono mt-2 pl-6 text-[11px] text-ink-3">
           {copy.agent}
@@ -65,14 +107,38 @@ export function StageState({ projectId, versionId, stage }: { projectId: string;
       <div className="border-y border-line py-10" role="alert">
         <div className="flex items-center gap-3">
           <StatusDot status="error" />
-          <p className="text-[16px] text-ink">{copy.agent} didn&apos;t finish.</p>
+          <p className="text-[16px] text-ink">
+            {copy.agent} didn&apos;t finish.
+          </p>
         </div>
-        <p className="mt-2 max-w-lg pl-6 text-[14px] leading-relaxed text-ink-3">{state.error}</p>
+        <p className="mt-2 max-w-lg pl-6 text-[14px] leading-relaxed text-ink-3">
+          {state.error}
+        </p>
+        {(state.errorCode || state.errorDetail) && (
+          <div className="mt-5 max-w-2xl pl-6">
+            <Disclosure
+              summary={
+                <span className="mono text-[11px] text-ink-3">
+                  Technical details
+                </span>
+              }
+            >
+              <ErrorDetails code={state.errorCode} detail={state.errorDetail} />
+            </Disclosure>
+          </div>
+        )}
         <div className="mt-6 pl-6">
-          <Button size="sm" onClick={() => retryStage(projectId, versionId, stage)} disabled={isRunning}>
+          <Button
+            size="sm"
+            onClick={() => retryStage(projectId, versionId, stage)}
+            disabled={isRunning}
+          >
             <IconRetry size={14} /> Retry this step
           </Button>
-          <p className="mono mt-3 text-[11px] text-ink-4">Completed steps are kept. Only this step and what depends on it will re-run.</p>
+          <p className="mono mt-3 text-[11px] text-ink-4">
+            Completed steps are kept. Only this step and what depends on it will
+            re-run.
+          </p>
         </div>
       </div>
     );
@@ -82,10 +148,31 @@ export function StageState({ projectId, versionId, stage }: { projectId: string;
     <div className="border-y border-line py-10">
       <p className="text-[16px] text-ink">Not analysed yet.</p>
       <div className="mt-6">
-        <Button size="sm" variant="primary" onClick={() => analyse(projectId, versionId)} disabled={isRunning}>
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={() => analyse(projectId, versionId)}
+          disabled={isRunning}
+        >
           Run analysis
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Shown above a section that was produced without some of its inputs. */
+export function MissingInputs({ missing }: { missing: StageId[] }) {
+  return (
+    <p
+      className="mono mb-8 flex flex-wrap items-center gap-x-2 gap-y-1 border-y border-dashed border-line-2 py-2.5 text-[11px] text-ink-3"
+      role="note"
+    >
+      <span aria-hidden="true">○</span>
+      Built without{" "}
+      {missing.map((m) => STAGE_COPY[m].label.toLowerCase()).join(", ")}:{" "}
+      {missing.length === 1 ? "that step" : "those steps"} didn&apos;t complete,
+      and nothing here fills the gap.
+    </p>
   );
 }

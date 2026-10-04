@@ -17,8 +17,13 @@ export const groq = createCompatibleProvider({
   baseUrl: () => (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").replace(/\/$/, ""),
   apiKey: () => process.env.GROQ_API_KEY,
   model: () => process.env.GROQ_MODEL?.trim() || undefined,
-  defaultModels: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "meta-llama/llama-4-maverick-17b-128e-instruct"],
+  defaultModels: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"],
   supportsJsonMode: true,
+  reasoningModels: /gpt-oss|qwen3/i,
+  maxTokensParam: "max_completion_tokens",
+  // Groq documents 8,000 TPM for gpt-oss on the base tier. The real limit is
+  // read from response headers, so higher tiers are only throttled briefly.
+  initialTpm: (model) => Number(process.env.GROQ_TPM) || (/gpt-oss|qwen3/i.test(model) ? 8000 : undefined),
   note: "Free tier, very fast.",
 });
 

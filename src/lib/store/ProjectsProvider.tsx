@@ -3,10 +3,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { emptyStages, pendingStages, retryPlan } from "@/lib/agents/pipeline";
-import { generateDocument, streamAnalysis } from "@/lib/ai/client";
-import type { StageEvent } from "@/lib/agents/orchestrator";
+import { cancelRun, engineInfo, followRun, generateDocument, runStatus, startRun, streamAnalysis } from "@/lib/ai/client";
+import type { StageEvent } from "@/lib/agents/events";
 import { repository } from "@/lib/storage/localRepository";
 import { nowIso, provisionalTitle, uid } from "@/lib/utils";
+import type { AiError } from "@/lib/ai/contracts";
 import {
   STAGE_IDS,
   type Analysis,
@@ -14,6 +15,7 @@ import {
   type ExperimentState,
   type IdeaVersion,
   type Project,
+  type ShareRecord,
   type StageId,
 } from "@/types";
 
@@ -44,6 +46,10 @@ export interface ProjectActions {
   analyse(projectId: string, versionId: string, stages?: StageId[]): void;
   retryStage(projectId: string, versionId: string, stage: StageId): void;
   stop(versionId: string): void;
+  /** Reconnect to a durable run in progress. */
+  resume(projectId: string, versionId: string): void;
+  /** Record (or clear) the shared link for a version. */
+  setShare(projectId: string, versionId: string, share: ShareRecord | null): void;
   setExperiment(projectId: string, versionId: string, experimentId: string, patch: Partial<ExperimentState>): void;
   generateDoc(projectId: string, versionId: string, kind: DocKind): Promise<void>;
 }
@@ -59,6 +65,8 @@ function newVersion(idea: string, number: number, note = ""): IdeaVersion {
 function settleInterrupted(p: Project): Project {
   let changed = false;
   const versions = p.versions.map((v) => {
+    // A durable run keeps going on the server; it is reconnected, not interrupted.
+    if (v.run) return v;
     const stages = { ...v.stages };
     for (const id of STAGE_IDS) {
       const s = stages[id];
@@ -122,20 +130,39 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const actions = useMemo<ProjectActions>(() => {
-    const applyEvent = (projectId: string, versionId: string, e: StageEvent) => {
-      if (e.type === "done") return;
-      mutateVersion(projectId, versionId, (v) => {
+    const applyEvent = (projectId: string, versionId: string, e: StageEvent, cursor?: number) => {
+      // For durable runs, remember how far we've read so a reload resumes from here.
+      const withCursor = (v: IdeaVersion): IdeaVersion => (cursor !== undefined && v.run ? { ...v, run: { ...v.run, cursor } } : v);
+      if (e.type === "done") {
+        if (cursor !== undefined) mutateVersion(projectId, versionId, withCursor);
+        return;
+      }
+      if (e.type === "sources") {
+        mutateVersion(projectId, versionId, (v) => withCursor({ ...v, analysis: { ...v.analysis, sources: e.sources } }));
+        return;
+      }
+      mutateVersion(projectId, versionId, (vIn) => {
+        const v = withCursor(vIn);
         const prev = v.stages[e.stage];
         if (e.type === "note") return { ...v, stages: { ...v.stages, [e.stage]: { ...prev, note: e.note } } };
         if (e.status === "running") return { ...v, stages: { ...v.stages, [e.stage]: { status: "running", startedAt: nowIso() } } };
         if (e.status === "error") {
-          return { ...v, stages: { ...v.stages, [e.stage]: { ...prev, status: "error", error: e.error.message, finishedAt: nowIso() } } };
+          return {
+            ...v,
+            stages: {
+              ...v.stages,
+              [e.stage]: { status: "error", startedAt: prev.startedAt, finishedAt: nowIso(), error: e.error.message, errorCode: e.error.code, errorDetail: e.error.detail },
+            },
+          };
         }
         const analysis: Analysis = { ...v.analysis, [e.stage]: e.data };
         return {
           ...v,
           analysis,
-          stages: { ...v.stages, [e.stage]: { status: "done", startedAt: prev.startedAt, finishedAt: nowIso(), engine: e.engine, note: e.note } },
+          stages: {
+            ...v.stages,
+            [e.stage]: { status: "done", startedAt: prev.startedAt, finishedAt: nowIso(), engine: e.engine, note: e.note, trace: e.trace, missingInputs: e.missingInputs },
+          },
         };
       });
       // The analyst names the project once it understands the idea.
@@ -155,6 +182,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       // Clear stale results for the stages being re-run, then queue them.
       const prior: Analysis = { ...version.analysis };
       for (const id of toRun) delete prior[id];
+      // Re-running research means searching again.
+      if (toRun.includes("research")) delete prior.sources;
       mutateVersion(projectId, versionId, (v) => ({
         ...v,
         analysis: prior,
@@ -164,27 +193,78 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       const controller = new AbortController();
       controllers.current.set(versionId, controller);
       setFlag("running", versionId, true);
+      const body = { idea: version.idea, stages: toRun, prior: prior as Record<string, unknown> };
 
-      void streamAnalysis({ idea: version.idea, stages: toRun, prior: prior as Record<string, unknown> }, (e) => applyEvent(projectId, versionId, e), controller.signal).then(
-        ({ error }) => {
-          controllers.current.delete(versionId);
-          setFlag("running", versionId, false);
-          // Anything still queued or running didn't get an answer.
-          mutateVersion(projectId, versionId, (v) => {
-            const stagesNow = { ...v.stages };
-            for (const id of STAGE_IDS) {
-              if (stagesNow[id].status === "queued" || stagesNow[id].status === "running") {
-                stagesNow[id] = {
-                  status: "error",
-                  error: controller.signal.aborted ? "Stopped before this step finished." : (error?.message ?? "This step didn't complete."),
-                };
-              }
-            }
-            return { ...v, stages: stagesNow };
-          });
-          if (error && error.message !== "Stopped.") toast.error(error.message);
-        },
-      );
+      void engineInfo().then(async (engine) => {
+        if (engine?.runner !== "inline") {
+          const started = await startRun(body);
+          if (started.ok) {
+            mutateVersion(projectId, versionId, (v) => ({ ...v, run: { id: started.data.runId, cursor: 0, startedAt: nowIso() } }));
+            return follow(projectId, versionId, controller);
+          }
+          // The durable runner isn't available here; fall back to one streaming request.
+          console.warn("IdeaGuard: durable run could not start, using inline runner:", started.error.message);
+        }
+        const { error } = await streamAnalysis(body, (e) => applyEvent(projectId, versionId, e), controller.signal);
+        finish(projectId, versionId, controller, error);
+      });
+    };
+
+    /** Mark anything still pending as not completed, and release the run. */
+    const finish = (projectId: string, versionId: string, controller: AbortController, error: AiError | null) => {
+      controllers.current.delete(versionId);
+      setFlag("running", versionId, false);
+      mutateVersion(projectId, versionId, (v) => {
+        const stagesNow = { ...v.stages };
+        for (const id of STAGE_IDS) {
+          if (stagesNow[id].status === "queued" || stagesNow[id].status === "running") {
+            stagesNow[id] = {
+              status: "error",
+              errorCode: controller.signal.aborted ? "network" : error?.code,
+              error: controller.signal.aborted ? "Stopped before this step finished." : (error?.message ?? "This step didn't complete."),
+            };
+          }
+        }
+        const next: IdeaVersion = { ...v, stages: stagesNow };
+        delete next.run;
+        return next;
+      });
+      if (error && error.message !== "Stopped.") toast.error(error.message);
+    };
+
+    /**
+     * Follow a durable run's event stream, reconnecting from the last event
+     * read until the run finishes. The run itself doesn't depend on this tab.
+     */
+    const follow = async (projectId: string, versionId: string, controller: AbortController) => {
+      let failures = 0;
+      for (;;) {
+        const version = stateRef.current.projects.find((p) => p.id === projectId)?.versions.find((v) => v.id === versionId);
+        const run = version?.run;
+        if (!run) return finish(projectId, versionId, controller, null);
+        const res = await followRun(run.id, run.cursor, (e, i) => applyEvent(projectId, versionId, e, i + 1), controller.signal);
+        if (res.done) return finish(projectId, versionId, controller, null);
+        if (controller.signal.aborted) return finish(projectId, versionId, controller, null);
+        if (res.notFound) return finish(projectId, versionId, controller, { code: "network", message: "This run is no longer available on the server.", retryable: true });
+        const status = await runStatus(run.id);
+        if (status && !["pending", "running"].includes(status)) {
+          // Finished without a final event (e.g. cancelled): read once more for stragglers, then settle.
+          const tail = await followRun(run.id, stateRef.current.projects.find((p) => p.id === projectId)?.versions.find((v) => v.id === versionId)?.run?.cursor ?? run.cursor, (e, i) => applyEvent(projectId, versionId, e, i + 1), controller.signal);
+          return finish(projectId, versionId, controller, tail.done ? null : { code: "upstream", message: `The run ended (${status}) before every step finished.`, retryable: true });
+        }
+        failures = res.error ? failures + 1 : 0;
+        if (failures > 8) return finish(projectId, versionId, controller, res.error);
+        await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** Math.max(0, failures - 1), 8000)));
+      }
+    };
+
+    /** Reconnect to a durable run that was in progress when the page was last open. */
+    const resume = (projectId: string, versionId: string) => {
+      if (controllers.current.has(versionId)) return;
+      const controller = new AbortController();
+      controllers.current.set(versionId, controller);
+      setFlag("running", versionId, true);
+      void follow(projectId, versionId, controller);
     };
 
     return {
@@ -233,7 +313,19 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       },
 
       stop(versionId) {
+        const run = stateRef.current.projects.flatMap((p) => p.versions).find((v) => v.id === versionId)?.run;
+        if (run) void cancelRun(run.id);
         controllers.current.get(versionId)?.abort();
+      },
+
+      resume,
+
+      setShare(projectId, versionId, share) {
+        mutateVersion(projectId, versionId, (v) => {
+          const next: IdeaVersion = { ...v, share: share ?? undefined };
+          if (!share) delete next.share;
+          return next;
+        });
       },
 
       setExperiment(projectId, versionId, experimentId, patch) {
@@ -260,6 +352,12 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       },
     };
   }, [mutate, mutateVersion]);
+
+  // Reconnect to durable runs that were in progress when the page was last open.
+  useEffect(() => {
+    if (!state.ready) return;
+    for (const p of state.projects) for (const v of p.versions) if (v.run && !controllers.current.has(v.id)) actions.resume(p.id, v.id);
+  }, [state.ready, state.projects, actions]);
 
   return (
     <StateCtx.Provider value={state}>

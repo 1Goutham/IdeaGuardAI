@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { STAGE_IDS } from "@/types";
 import { STAGE_COPY } from "@/lib/agents/pipeline";
 import { pad2 } from "@/lib/utils";
@@ -20,7 +21,12 @@ export function PipelineStrip() {
         <h2 id="pipeline-title" className="label">
           What happens next
         </h2>
-        <p className="mono hidden text-[11px] text-ink-4 md:block">7 agents · sourced where possible · labelled where not</p>
+        <p className="mono flex items-baseline gap-5 text-[11px] text-ink-4">
+          <span className="hidden md:inline">7 agents · sourced where possible · labelled where not</span>
+          <Link href="/how-it-works" className="text-ink-2 hover:text-ink">
+            <span className="link-underline">How it works</span> →
+          </Link>
+        </p>
       </div>
       <ol className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-7 lg:gap-x-4">
         {STAGE_IDS.map((id, i) => (

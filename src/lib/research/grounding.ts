@@ -9,10 +9,16 @@ import type { Basis, Source } from "@/types";
  * least one real, retrieved source remains. Everything else is "inference".
  */
 
-export function groundItems<T extends { sourceIds: string[] }>(items: T[], sources: Source[]): (T & { basis: Basis })[] {
+/** Counts citations removed because they pointed at nothing retrieved. */
+export interface GroundingTally {
+  dropped: number;
+}
+
+export function groundItems<T extends { sourceIds: string[] }>(items: T[], sources: Source[], tally?: GroundingTally): (T & { basis: Basis })[] {
   const known = new Set(sources.map((s) => s.id));
   return items.map((item) => {
     const valid = [...new Set(item.sourceIds.filter((id) => known.has(id)))];
+    if (tally) tally.dropped += new Set(item.sourceIds).size - valid.length;
     return { ...item, sourceIds: valid, basis: valid.length ? "evidence" : "inference" };
   });
 }
@@ -29,6 +35,7 @@ function normalise(text: string): string {
 export function verifyCompetitor<T extends { name: string; sourceIds: string[]; url: string }>(
   competitor: T,
   sources: Source[],
+  tally?: GroundingTally,
 ): T & { verified: boolean } {
   const name = normalise(competitor.name);
   const compact = name.replace(/ /g, "");
@@ -39,6 +46,8 @@ export function verifyCompetitor<T extends { name: string; sourceIds: string[]; 
   };
   const byId = new Map(sources.map((s) => [s.id, s]));
   const cited = competitor.sourceIds.map((id) => byId.get(id)).filter((s): s is Source => !!s && mentions(s));
+  // A citation that doesn't exist, or doesn't name this product, is removed.
+  if (tally) tally.dropped += new Set(competitor.sourceIds).size - cited.length;
   const supporting = cited.length ? cited : sources.filter(mentions).slice(0, 3);
   const url = competitor.url && /^https?:\/\//.test(competitor.url) ? competitor.url : "";
   return { ...competitor, url, sourceIds: supporting.map((s) => s.id), verified: supporting.length > 0 };

@@ -93,7 +93,7 @@ export function AnalysisProgress() {
 
       <div className="mt-6 flex items-center justify-between gap-6">
         <p className="max-w-md text-[12.5px] leading-relaxed text-ink-3">
-          Research and competitor mapping run in parallel, then feasibility and risk. Sections fill in as each agent finishes; you can open them now.
+          Competition, feasibility and risk run in parallel once research is in. Sections fill in as each agent finishes; you can open them now. On free-tier models, steps may pause for rate limits; they resume on their own.
         </p>
         {isRunning && <TextAction onClick={() => stop(version.id)}>Stop</TextAction>}
       </div>

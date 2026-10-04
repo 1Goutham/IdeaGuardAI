@@ -25,13 +25,29 @@ export function oneOf<const T extends readonly [string, ...string[]]>(values: T,
 
 export const level = oneOf(["low", "medium", "high"] as const, "medium");
 
+/**
+ * Internal data is plain text. Models sometimes add markdown anyway (**bold**,
+ * "# ", "- " bullets, `code`); strip it here so it never reaches storage.
+ * Rendering decides formatting, not the model.
+ */
+export function plain(value: string): string {
+  return value
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*•]\s+/gm, "")
+    .replace(/\s+\n/g, "\n")
+    .trim();
+}
+
 /** A required sentence. Empty or missing fails validation so the repair pass can ask again. */
-export const text = (description: string) => z.string().trim().min(1).describe(description);
+export const text = (description: string) => z.string().transform(plain).pipe(z.string().min(1)).describe(description);
 
 /** Optional prose; missing becomes "". */
 export const optText = (description: string) =>
   z
-    .preprocess((v) => (v == null ? "" : v), z.string().trim())
+    .preprocess((v) => (v == null ? "" : typeof v === "string" ? plain(v) : v), z.string().trim())
     .catch("")
     .describe(description);
 
@@ -45,7 +61,7 @@ export function list<T extends z.ZodType>(item: T, description: string, max = 12
     .describe(description);
 }
 
-export const strings = (description: string, max = 10) => list(z.string().trim().min(1), description, max);
+export const strings = (description: string, max = 10) => list(z.string().transform(plain).pipe(z.string().min(1)), description, max);
 
 /** Source references like "S3". Validity against the real source list is checked later, in grounding. */
 export const sourceIds = z

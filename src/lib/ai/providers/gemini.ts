@@ -1,6 +1,7 @@
 import "server-only";
-import { aiError } from "../contracts";
-import type { CompletionOptions, CompletionResult, Provider, ProviderStatus } from "./types";
+import { aiError, sanitize } from "../contracts";
+import { parseDuration } from "../rate";
+import type { Capabilities, CompletionOptions, CompletionResult, Provider, ProviderStatus } from "./types";
 
 /**
  * Google Gemini. Free tier with no card, native JSON mode. Model IDs are
@@ -63,7 +64,8 @@ async function resolveModel(key: string): Promise<string> {
 interface GeminiPayload {
   candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
   promptFeedback?: { blockReason?: string };
-  error?: { message?: string };
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+  error?: { message?: string; status?: string; details?: { retryDelay?: string }[] };
 }
 
 async function request(key: string, model: string, opts: CompletionOptions): Promise<Response | CompletionResult> {
@@ -71,7 +73,7 @@ async function request(key: string, model: string, opts: CompletionOptions): Pro
     return await fetch(`${BASE}/v1beta/models/${model}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
       body: JSON.stringify({
         system_instruction: { parts: [{ text: opts.system }] },
         contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
@@ -84,7 +86,8 @@ async function request(key: string, model: string, opts: CompletionOptions): Pro
     });
   } catch (e) {
     const name = (e as Error)?.name;
-    if (name === "TimeoutError" || name === "AbortError") return aiError("timeout", "Gemini took too long to respond.", true);
+    if (name === "TimeoutError") return aiError("timeout", "Gemini took too long to respond.", true);
+    if (name === "AbortError") return aiError("network", "Stopped.");
     return aiError("network", "Couldn't reach Gemini.", true);
   }
 }
@@ -94,6 +97,7 @@ export const gemini: Provider = {
   label: "Google Gemini",
   signupUrl: SIGNUP,
   configured: () => !!process.env.GEMINI_API_KEY,
+  capabilities: (): Capabilities => ({ jsonMode: true, reasoningEffort: false }),
 
   async complete(opts) {
     const key = process.env.GEMINI_API_KEY;
@@ -111,12 +115,16 @@ export const gemini: Provider = {
     }
     if (!(res instanceof Response)) return res;
 
-    if (res.status === 429) return { ...aiError("rate_limited", "Gemini is rate-limited right now.", true), model };
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as GeminiPayload | null;
-      const reason = body?.error?.message?.slice(0, 160) ?? "";
+      const reason = sanitize(body?.error?.message ?? "", 200);
+      const detail = { provider: "Google Gemini", model, status: res.status, providerCode: body?.error?.status };
+      if (res.status === 429) {
+        const retryAfterMs = parseDuration(body?.error?.details?.find((d) => d.retryDelay)?.retryDelay);
+        return { ...aiError("rate_limited", `Gemini rate limit reached${reason ? `: ${reason}` : "."}`, true, detail), model, rate: { retryAfterMs } };
+      }
       console.error("Gemini error:", res.status, model, reason);
-      return { ...aiError("upstream", `Gemini returned ${res.status}${reason ? `: ${reason}` : ""}.`, res.status >= 500), model };
+      return { ...aiError("upstream", `Gemini returned ${res.status}${reason ? `: ${reason}` : ""}.`, res.status >= 500, detail), model };
     }
 
     const payload = (await res.json().catch(() => null)) as GeminiPayload | null;
@@ -124,11 +132,15 @@ export const gemini: Provider = {
     if (payload.promptFeedback?.blockReason) return { ...aiError("blocked", "Gemini declined this request. Try rephrasing the idea."), model };
     const candidate = payload.candidates?.[0];
     const text = candidate?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? "").join("").trim();
+    const usage = payload.usageMetadata ? { input: payload.usageMetadata.promptTokenCount ?? 0, output: payload.usageMetadata.candidatesTokenCount ?? 0 } : undefined;
+    if (candidate?.finishReason === "MAX_TOKENS") {
+      return { ...aiError("truncated", "Gemini stopped at the output limit before finishing.", true, { provider: "Google Gemini", model, received: sanitize(text ?? "", 300) }), model, usage };
+    }
     if (!text) {
       if (candidate?.finishReason === "SAFETY") return { ...aiError("blocked", "Gemini declined this request. Try rephrasing the idea."), model };
       return { ...aiError("empty", "Gemini came back empty.", true), model };
     }
-    return { ok: true, data: text, model };
+    return { ok: true, data: text, model, usage, finish: candidate?.finishReason };
   },
 
   async status(): Promise<ProviderStatus> {

@@ -52,7 +52,7 @@ function ResearchView({ r }: { r: ResearchResult }) {
 
       {r.mode === "offline" && (
         <div className="-mt-6 mb-14 border-l border-dashed border-warn pl-4">
-          <p className="text-[14px] text-ink">These findings are model inference, not research.</p>
+          <p className="text-[14px] text-ink">Evidence unavailable: these findings are model inference, not research.</p>
           <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-ink-3">
             No search provider was configured, so nothing below is backed by a source. Add <span className="mono">TAVILY_API_KEY</span> or <span className="mono">BRAVE_API_KEY</span> and re-run
             research to replace them with sourced evidence.

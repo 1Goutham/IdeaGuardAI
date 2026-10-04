@@ -11,19 +11,20 @@ import { SignalList } from "@/components/report/Signals";
 import { StanceTag } from "@/components/report/StanceTag";
 import { STAGE_IDS } from "@/types";
 import { AnalysisProgress } from "./AnalysisProgress";
+import { PipelineTrace } from "./PipelineTrace";
 import { useWorkspace } from "./WorkspaceContext";
 
 export function Overview() {
-  const { project, version, isRunning, openRefine, href } = useWorkspace();
+  const { project, version, isRunning, openRefine, href, readOnly } = useWorkspace();
   const { retryStage, analyse } = useProjectActions();
   const a = version.analysis;
   const complete = isComplete(version.stages);
   const failed = STAGE_IDS.filter((id) => version.stages[id].status === "error");
 
-  if (isRunning || (!complete && !failed.length && !a.strategy)) return <AnalysisProgress />;
+  if (!readOnly && (isRunning || (!complete && !failed.length && !a.strategy))) return <AnalysisProgress />;
 
   const u = a.understand;
-  if (!u) return <AnalysisProgress />;
+  if (!u) return readOnly ? null : <AnalysisProgress />;
   const tally = tallyEvidence(a);
   const s = a.strategy;
   const critic = a.critic;
@@ -53,7 +54,7 @@ export function Overview() {
             <p className="text-[15px] text-ink">
               {failed.length === 1 ? "One step" : `${failed.length} steps`} didn&apos;t complete. The rest of the report is below.
             </p>
-            {failed.length > 1 && (
+            {failed.length > 1 && !readOnly && (
               <Button size="sm" variant="primary" onClick={() => analyse(project.id, version.id)} disabled={isRunning}>
                 <IconRetry size={14} /> Resume analysis
               </Button>
@@ -65,9 +66,11 @@ export function Overview() {
                 <StatusDot status="error" />
                 <span className="text-ink-2">{STAGE_COPY[id].agent}</span>
                 <span className="text-ink-3">{version.stages[id].error}</span>
-                <TextAction onClick={() => retryStage(project.id, version.id, id)} disabled={isRunning}>
-                  <IconRetry size={12} /> Retry
-                </TextAction>
+                {!readOnly && (
+                  <TextAction onClick={() => retryStage(project.id, version.id, id)} disabled={isRunning}>
+                    <IconRetry size={12} /> Retry
+                  </TextAction>
+                )}
               </li>
             ))}
           </ul>
@@ -85,13 +88,25 @@ export function Overview() {
           <p className="display mt-5 max-w-3xl text-[28px] leading-[1.12] text-ink md:text-[36px]">{s.headline}</p>
           <p className="measure mt-5 text-[15px] leading-relaxed text-ink-2">{s.reasoning}</p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Button variant="primary" size="sm" onClick={() => openRefine(s.refinedIdea)}>
-              Refine with this in mind <IconArrowRight size={14} className="nudge" />
-            </Button>
+            {!readOnly && (
+              <Button variant="primary" size="sm" onClick={() => openRefine(s.refinedIdea)}>
+                Refine with this in mind <IconArrowRight size={14} className="nudge" />
+              </Button>
+            )}
             <Link href={href("mvp")} className="group inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-ink-2 hover:text-ink">
               <span className="link-underline">See the MVP</span>
             </Link>
           </div>
+        </section>
+      )}
+
+      {!s && version.stages.strategy.status === "error" && (
+        <section aria-label="Recommendation" className="mb-16 border-y border-dashed border-line-2 py-6">
+          <p className="label">Recommendation</p>
+          <p className="mt-3 text-[16px] text-ink">○ Unavailable for this run.</p>
+          <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-ink-3">
+            The Product Strategist didn&apos;t complete, so there is no stance or MVP yet. The sections that did complete are below; nothing has been filled in for the missing step.
+          </p>
         </section>
       )}
 
@@ -119,16 +134,17 @@ export function Overview() {
       </Block>
 
       <Block title="Evidence behind this report" id="evidence">
-        <dl className="grid grid-cols-2 border-t border-line md:grid-cols-4">
+        <dl className="grid grid-cols-2 border-t border-line md:grid-cols-5">
           {[
             { k: "Sourced statements", v: tally.sourced, hint: "Backed by a retrieved page" },
             { k: "Inferences", v: tally.inferred, hint: "Model reasoning, no source" },
             { k: "Sources read", v: tally.sources, hint: a.research?.mode === "live" ? `Last researched ${formatDate(a.research.researchedAt)}` : "Live research was off" },
             { k: "Competitors verified", v: `${tally.verifiedCompetitors}/${tally.verifiedCompetitors + tally.unverifiedCompetitors}`, hint: "Named in a source" },
+            { k: "Unavailable", v: failed.length, hint: failed.length ? failed.map((id) => STAGE_COPY[id].label).join(", ") : "Every step completed" },
           ].map((x, i) => (
-            <div key={x.k} className={`border-b border-line py-5 ${i % 2 ? "pl-5" : "pr-5"} md:px-5 md:first:pl-0 ${i > 0 ? "md:border-l" : ""}`}>
+            <div key={x.k} className={`border-b border-line py-5 ${i % 2 ? "pl-5" : "pr-5"} md:px-4 md:first:pl-0 ${i > 0 ? "md:border-l" : ""}`}>
               <dt className="label">{x.k}</dt>
-              <dd className="display tabular mt-3 text-[40px] text-ink">{x.v}</dd>
+              <dd className="display tabular mt-3 text-[36px] text-ink">{x.v}</dd>
               <dd className="mt-1 text-[12px] text-ink-3">{x.hint}</dd>
             </div>
           ))}
@@ -164,21 +180,7 @@ export function Overview() {
       )}
 
       <Block title="How this was produced" id="engine">
-        <ul className="border-t border-line">
-          {STAGE_IDS.map((id) => {
-            const st = version.stages[id];
-            return (
-              <li key={id} className="grid grid-cols-[1.5rem_1fr_auto] items-baseline gap-3 border-b border-line py-2.5 text-[13px]">
-                <StatusDot status={st.status} />
-                <span className="text-ink-2">{STAGE_COPY[id].agent}</span>
-                <span className="mono truncate text-right text-[11px] text-ink-3">{st.engine ?? (st.status === "error" ? "failed" : "—")}</span>
-              </li>
-            );
-          })}
-        </ul>
-        <p className="mt-4 max-w-2xl text-[12.5px] leading-relaxed text-ink-3">
-          Each agent is a separate structured call validated against a schema. Citations are checked in code: a reference to a source that wasn&apos;t retrieved is removed, and anything left without a source is labelled as inference.
-        </p>
+        <PipelineTrace projectId={project.id} version={version} isRunning={isRunning} readOnly={readOnly} />
       </Block>
     </article>
   );
