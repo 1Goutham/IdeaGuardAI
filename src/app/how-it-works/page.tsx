@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { STAGE_COPY } from "@/lib/agents/pipeline";
 import { pad2 } from "@/lib/utils";
-import { Logo, ThemeToggle } from "@/components/ui";
+import { BracketLink, Logo, PillLink } from "@/components/ui";
+import { SiteFooter } from "@/components/SiteFooter";
 import { STAGE_IDS } from "@/types";
 
 export const metadata: Metadata = {
@@ -58,17 +59,14 @@ export default function HowItWorks() {
       <header className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-5 md:px-10">
         <Logo />
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-[13px] text-ink-2 hover:text-ink">
-            <span className="link-underline">Analyse an idea</span>
-          </Link>
-          <ThemeToggle />
+          <BracketLink href="/">Analyse an idea</BracketLink>
         </div>
       </header>
 
       <main id="main" className="mx-auto max-w-[1200px] px-5 pb-24 md:px-10">
         <section className="pb-16 pt-12 md:pb-24 md:pt-24">
           <p className="label animate-rise">How it works</p>
-          <h1 className="display animate-rise mt-6 max-w-4xl text-[44px] text-ink sm:text-[64px] lg:text-[84px]" style={{ animationDelay: "60ms" }}>
+          <h1 className="display animate-rise mt-6 max-w-4xl text-[36px] text-ink sm:text-[48px] lg:text-[60px]" style={{ animationDelay: "60ms" }}>
             Seven agents. Every claim labelled.
           </h1>
           <p className="measure animate-rise mt-6 text-[16px] leading-relaxed text-ink-2" style={{ animationDelay: "120ms" }}>
@@ -148,9 +146,7 @@ export default function HowItWorks() {
         </section>
 
         <div className="mt-24 flex flex-wrap items-center gap-6 border-t border-line pt-10">
-          <Link href="/" className="inline-flex h-11 items-center rounded-full bg-ink px-6 text-[14px] text-on-ink transition-opacity hover:opacity-90">
-            Analyse an idea
-          </Link>
+          <PillLink href="/">Analyse an idea</PillLink>
           {process.env.NEXT_PUBLIC_EXAMPLE_REPORT && (
             <Link href={process.env.NEXT_PUBLIC_EXAMPLE_REPORT} className="text-[14px] text-ink-2 hover:text-ink">
               <span className="link-underline">See an example report</span>
@@ -158,6 +154,9 @@ export default function HowItWorks() {
           )}
         </div>
       </main>
+      <div className="mx-auto max-w-[1200px] px-5 md:px-10">
+        <SiteFooter />
+      </div>
     </div>
   );
 }

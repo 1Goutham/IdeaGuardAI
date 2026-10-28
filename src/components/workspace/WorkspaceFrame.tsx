@@ -1,17 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { isComplete } from "@/lib/agents/pipeline";
 import { formatDate } from "@/lib/utils";
-import { LogoMark } from "@/components/ui";
+import { Logo } from "@/components/ui";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SourcesProvider } from "@/components/report/SourcesContext";
 import { SectionNav } from "./SectionNav";
 import { WorkspaceProvider, type WorkspaceValue } from "./WorkspaceContext";
 
 /**
- * The workspace layout: sticky header, section rail (desktop) or tab bar
- * (mobile), and the content column. Used by the local workspace and by
- * shared read-only reports, which differ only in what the header offers.
+ * The workspace layout: header, the idea in one line, a section rail
+ * (desktop) or tab bar (mobile), and the content column. Used by the
+ * local workspace and by shared read-only reports, which differ only in
+ * what the header offers.
  */
 export function WorkspaceFrame({
   value,
@@ -30,46 +31,52 @@ export function WorkspaceFrame({
 }) {
   const { project, version, isRunning, isGenerating } = value;
   const complete = isComplete(version.stages);
+  const line = version.analysis.understand?.oneLiner;
   return (
     <WorkspaceProvider value={value}>
       <SourcesProvider sources={version.analysis.sources?.items ?? version.analysis.research?.sources ?? []}>
-        <div className="min-h-dvh">
-          <header className="no-print sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur-md">
-            <div className="mx-auto flex h-14 max-w-[1320px] items-center gap-3 px-5 md:gap-4 md:px-8">
-              <Link href="/" className="text-ink" aria-label="IdeaGuard home">
-                <LogoMark />
-              </Link>
-              <span className="text-ink-4" aria-hidden="true">
-                /
-              </span>
-              <span className="min-w-0 truncate text-[14px] text-ink" title={project.title}>
-                {project.title}
-              </span>
+        <div className="mx-auto flex min-h-dvh max-w-[1280px] flex-col px-5 md:px-10">
+          <header className="no-print sticky top-0 z-30 -mx-5 bg-paper/80 px-5 backdrop-blur-md md:-mx-10 md:px-10">
+            <div className="flex h-16 items-center gap-3">
+              <Logo height={24} />
               {titleAddon}
-              <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-4">{actions}</div>
+              <div className="ml-auto flex shrink-0 items-center gap-3 md:gap-4">{actions}</div>
             </div>
-            <div className="border-t border-line px-5 lg:hidden">
+            <div className="border-y border-line lg:hidden">
               <SectionNav base={base} version={version} generating={isGenerating} variant="bar" />
             </div>
           </header>
 
-          <div className="mx-auto grid max-w-[1320px] gap-10 px-5 md:px-8 lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-16 xl:gap-24">
+          <section aria-label="The idea" className="pb-10 pt-10 md:pb-14 md:pt-16">
+            <p className="mono mb-3 text-[10.5px] text-ink-4">
+              {project.title} · v{version.number}
+            </p>
+            {line ? (
+              <h1 key={line} className="animate-fade max-w-[680px] text-[21px] font-normal leading-[1.35] tracking-[-0.01em] text-ink md:text-[24px]">
+                {line}
+              </h1>
+            ) : (
+              <h1 className="line-clamp-2 max-w-[680px] text-[21px] font-light leading-[1.35] text-ink-3 md:text-[24px]">{version.idea}</h1>
+            )}
+          </section>
+
+          <div className="grid flex-1 gap-10 lg:grid-cols-[150px_minmax(0,1fr)] lg:gap-14">
             <aside className="no-print hidden lg:block">
-              <div className="sticky top-14 pt-12">
+              <div className="sticky top-20">
                 <SectionNav base={base} version={version} generating={isGenerating} variant="rail" />
-                <div className="mono mt-6 space-y-1 text-[10.5px] leading-relaxed text-ink-4">
-                  <p>
-                    v{version.number} · {formatDate(version.createdAt)}
-                  </p>
+                <div className="mono mt-8 space-y-1 text-[10px] leading-relaxed text-ink-4">
+                  <p>{formatDate(version.createdAt)}</p>
                   <p>{isRunning ? "Analysis running…" : complete ? "Analysis complete" : "Analysis incomplete"}</p>
                   {railFooter}
                 </div>
               </div>
             </aside>
-            <main id="main" className="min-w-0 max-w-[920px] pb-32 pt-10 md:pt-14">
+            <main id="main" className="min-w-0 max-w-[980px] pb-24">
               {children}
             </main>
           </div>
+
+          <SiteFooter className="mt-auto" />
         </div>
       </SourcesProvider>
     </WorkspaceProvider>

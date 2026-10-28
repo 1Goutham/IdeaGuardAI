@@ -182,6 +182,13 @@ The UI only talks to `ProjectRepository`. Today that is `LocalRepository` (brows
 
 ## Design
 
-IdeaGuard shares a design language with [Ideako](https://ideako.vercel.app) and Goutham's portfolio: warm paper and ink, Outfit at a light weight for display type, Anonymous Pro for small mono labels, hairlines instead of boxes, bracketed text actions, and one lime accent reserved for state: what's running, what's current, what's selected.
+An indie-product look: true black, white ink, Outfit at light weights, Anonymous Pro for small mono labels and `[ bracketed ]` actions, hairlines instead of boxes, and one blue (from the wordmark) reserved for state: what's running, what's current, what's selected. The wordmark is `public/ideaguardlogo.png`; until that file exists a typeset fallback is shown.
 
-Evidence has its own visual grammar: a solid rule means sourced, a dashed rule means inference. Light and dark themes are both supported, motion respects `prefers-reduced-motion`, and every control is keyboard-reachable.
+Micro-interactions are small and functional rather than decorative:
+
+- The tagline's smiley reacts to the composer: `:)` at rest (with the odd wink), `:o` on focus, `:>` while typing, `:D` once the idea is long enough, `8)` on submit, `:(` if you submit too early (and the input shakes).
+- The input's underline is a meter that fills as the idea becomes long enough to analyse, with a blue bead riding its tip. The placeholder types out example ideas; <kbd>Tab</kbd> takes the one shown, <kbd>/</kbd> focuses the input from anywhere, <kbd>Enter</kbd> analyses.
+- Brackets spring apart on hover and snap in on press; arrows leave top-right and come back in from bottom-left; footer labels scramble and resolve; the logo wobbles.
+- The section rail's blue bead slides between sections; the analysis view reads like a build log with a live progress line.
+
+Evidence has its own visual grammar: a solid rule means sourced, a dashed rule means inference. Motion respects `prefers-reduced-motion`, and every control is keyboard-reachable.

@@ -7,5 +7,7 @@ export { Spinner } from "./Spinner";
 export { StatusDot } from "./StatusDot";
 export { Tag } from "./Tag";
 export { Textarea } from "./Textarea";
-export { ThemeToggle, themeScript } from "./ThemeToggle";
 export * from "./Icons";
+export { Wordmark } from "./Logo";
+export { Pill, PillLink, LoopArrow } from "./Pill";
+export { Scramble } from "./Scramble";

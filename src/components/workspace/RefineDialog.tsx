@@ -56,7 +56,7 @@ export function RefineDialog({ open, onClose, current, suggestion, nextNumber, i
         <div className="flex items-start justify-between gap-6 border-b border-line px-6 pb-4 pt-6">
           <div>
             <p className="label">New version · v{nextNumber}</p>
-            <h2 id="refine-title" className="display mt-3 text-[32px]">
+            <h2 id="refine-title" className="display mt-3 text-[24px]">
               Refine the idea
             </h2>
           </div>

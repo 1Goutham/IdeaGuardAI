@@ -16,7 +16,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
     const el = inner.current;
     if (!el || !autosize) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
+    // Hidden (e.g. inside a closed dialog): keep the rows-based height instead of collapsing to 0.
+    if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight}px`;
   }, [value, autosize]);
   return (
     <textarea

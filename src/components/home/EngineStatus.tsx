@@ -29,10 +29,10 @@ export function EngineStatus({ className }: { className?: string }) {
   };
 
   return (
-    <div className={cx("relative", className)}>
-      <span className="mono flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3">
+    <div className={cx("relative flex justify-center", className)}>
+      <span className="mono flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10.5px] text-ink-4">
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-accent ring-1 ring-ink/30" aria-hidden="true" />
+          <span className="size-1.5 rounded-full bg-accent animate-pulse-dot" aria-hidden="true" />
           {info.model.label}
           {info.model.model ? ` · ${info.model.model}` : ""}
         </span>
@@ -42,7 +42,7 @@ export function EngineStatus({ className }: { className?: string }) {
         </TextAction>
       </span>
       {result && (
-        <div role="status" className="absolute right-0 top-full z-40 mt-3 w-[min(360px,calc(100vw-2.5rem))] rounded-lg border border-line-2 bg-paper p-4 shadow-[0_24px_60px_-30px_rgb(0_0_0/0.45)]">
+        <div role="status" className="animate-fade absolute left-1/2 top-full z-40 mt-3 w-[min(360px,calc(100vw-2.5rem))] -translate-x-1/2 rounded-xl border border-line-2 bg-surface p-4 shadow-[0_30px_80px_-30px_rgb(0_0_0/0.9)]">
           <div className="flex items-baseline justify-between gap-4">
             <p className="label">Connection check</p>
             <TextAction onClick={() => setResult(null)}>Close</TextAction>
@@ -71,7 +71,7 @@ function Row({ ok, warn, title, meta, ms, detail }: { ok: boolean; warn?: boolea
   return (
     <li className="py-2.5">
       <div className="flex items-baseline gap-2.5 text-[12.5px]">
-        <span className={cx("size-1.5 shrink-0 translate-y-[-1px] rounded-full", ok ? "bg-accent ring-1 ring-ink/30" : warn ? "bg-warn" : "bg-danger")} aria-hidden="true" />
+        <span className={cx("size-1.5 shrink-0 translate-y-[-1px] rounded-full", ok ? "bg-success" : warn ? "bg-warn" : "bg-danger")} aria-hidden="true" />
         <span className="text-ink">{title}</span>
         <span className="sr-only">{ok ? "working" : warn ? "warning" : "failed"}</span>
         <span className="mono ml-auto shrink-0 text-[10.5px] text-ink-4">

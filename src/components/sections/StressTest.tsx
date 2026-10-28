@@ -41,7 +41,7 @@ function StressView({ c }: { c: CriticOutput }) {
           <p id="biggest" className="label flex items-center gap-2">
             <span className="size-1.5 rounded-full bg-accent ring-1 ring-ink" aria-hidden="true" /> Biggest assumption · {biggest.id}
           </p>
-          <blockquote className="display mt-6 max-w-3xl text-[32px] leading-[1.08] text-ink md:text-[48px]">“{biggest.statement}”</blockquote>
+          <blockquote className="display mt-5 max-w-3xl text-[22px] leading-[1.25] text-ink md:text-[26px]">“{biggest.statement}”</blockquote>
           <div className="mt-10 grid gap-10 md:grid-cols-2 md:gap-14">
             <div>
               <p className="label">Why this may fail</p>
