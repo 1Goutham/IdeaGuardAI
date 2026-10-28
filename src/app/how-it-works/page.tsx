@@ -4,6 +4,7 @@ import { STAGE_COPY } from "@/lib/agents/pipeline";
 import { pad2 } from "@/lib/utils";
 import { BracketLink, Logo, PillLink } from "@/components/ui";
 import { SiteFooter } from "@/components/SiteFooter";
+import { EngineStatus } from "@/components/home/EngineStatus";
 import { STAGE_IDS } from "@/types";
 
 export const metadata: Metadata = {
@@ -147,6 +148,7 @@ export default function HowItWorks() {
 
         <div className="mt-24 flex flex-wrap items-center gap-6 border-t border-line pt-10">
           <PillLink href="/">Analyse an idea</PillLink>
+          <EngineStatus className="ml-auto" />
           {process.env.NEXT_PUBLIC_EXAMPLE_REPORT && (
             <Link href={process.env.NEXT_PUBLIC_EXAMPLE_REPORT} className="text-[14px] text-ink-2 hover:text-ink">
               <span className="link-underline">See an example report</span>

@@ -1,4 +1,3 @@
-import { EngineStatus } from "@/components/home/EngineStatus";
 import { IdeaComposer } from "@/components/home/IdeaComposer";
 import { ProjectsMenu } from "@/components/home/ProjectList";
 import { AUTHOR_URL, SiteFooter } from "@/components/SiteFooter";
@@ -23,16 +22,15 @@ export default function Home() {
         <div className="animate-fade w-full max-w-[1000px]">
           <IdeaComposer />
         </div>
-        <p className="animate-fade mt-16 max-w-[560px] text-center text-[13px] font-light leading-relaxed text-ink-3 [animation-delay:120ms]">
-          An AI-powered product validation tool that helps turn raw ideas into viable opportunities. It analyses market potential, competition, risks and differentiation, so builders
-          can make smarter product decisions.
+        <p className="animate-fade mt-16 text-center text-[12.5px] font-light leading-relaxed text-ink-3 [animation-delay:120ms]">
+          An AI-powered product validation tool that helps turn raw ideas into viable opportunities.
+          <br className="hidden md:block" /> It analyses market potential, competition, risks, and differentiation to help builders make smarter product decisions.
         </p>
         {process.env.NEXT_PUBLIC_EXAMPLE_REPORT && (
           <BracketLink href={process.env.NEXT_PUBLIC_EXAMPLE_REPORT} className="animate-fade mt-5 [animation-delay:160ms]">
             See an example report
           </BracketLink>
         )}
-        <EngineStatus className="animate-fade mt-6 [animation-delay:200ms]" />
       </main>
 
       <SiteFooter />
