@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { useEffect, useRef } from "react";
 import { cx, pad2 } from "@/lib/utils";
 import { StatusDot } from "@/components/ui";
@@ -68,11 +69,11 @@ export function SectionNav({
                   ref={active ? activeRef : undefined}
                   href={hrefOf(item.slug)}
                   aria-current={active ? "page" : undefined}
-                  className={cx("relative flex h-11 items-center gap-2 text-[13.5px] transition-colors", active ? "text-ink" : "text-ink-3 hover:text-ink")}
+                  className={cx("relative flex h-11 items-center gap-2 text-[13px] font-light transition-colors", active ? "text-ink" : "text-ink-3 hover:text-ink")}
                 >
                   {status === "running" || status === "error" ? <StatusDot status={status} /> : null}
                   {item.label}
-                  <span className={cx("absolute inset-x-0 bottom-0 h-px bg-ink transition-transform duration-300", active ? "scale-x-100" : "scale-x-0")} aria-hidden="true" />
+                  {active && <motion.span layoutId="bar-line" className="absolute inset-x-0 bottom-0 h-px bg-accent" aria-hidden="true" />}
                 </Link>
               </li>
             );
@@ -84,32 +85,29 @@ export function SectionNav({
 
   return (
     <nav aria-label="Workspace sections">
-      <ul className="border-t border-line">
+      <ul className="space-y-0.5">
         {NAV.map((item, i) => {
           const active = isActive(item.slug);
           const status = statusFor(item, version, generating);
           const count = countFor(item.slug, version);
           return (
-            <li key={item.slug} className="border-b border-line">
+            <li key={item.slug}>
               <Link
                 href={hrefOf(item.slug)}
                 aria-current={active ? "page" : undefined}
-                className={cx("group grid h-10 grid-cols-[1.75rem_1fr_auto] items-center gap-2 text-[14px] transition-colors", active ? "text-ink" : "text-ink-3 hover:text-ink")}
+                className={cx("group relative flex h-7 items-center gap-2 text-[13px] font-light transition-colors", active ? "text-ink" : "text-ink-3 hover:text-ink")}
               >
-                <span className={cx("mono text-[10.5px]", active ? "text-ink" : "text-ink-4")}>{pad2(i + 1)}</span>
-                <span className="flex items-center gap-2">
-                  {active && <span className="size-1.5 rounded-full bg-accent ring-1 ring-ink/40" aria-hidden="true" />}
-                  <span className={cx("transition-transform duration-300", !active && "group-hover:translate-x-0.5")}>{item.label}</span>
+                {active && <motion.span layoutId="nav-bead" className="absolute -left-3.5 size-[5px] rounded-full bg-accent" transition={{ type: "spring", stiffness: 520, damping: 34 }} aria-hidden="true" />}
+                <span className={cx("transition-transform duration-300 ease-[var(--ease-spring)]", !active && "group-hover:translate-x-1")}>
+                  <span className={cx(active ? "text-ink-2" : "text-ink-4")}>[{pad2(i + 1)}]</span> {item.label}
                 </span>
-                <span className="flex items-center gap-2">
-                  {count && status === "done" && <span className="mono text-[10.5px] text-ink-4">{count}</span>}
-                  {status && status !== "done" && status !== "idle" && (
-                    <>
-                      <StatusDot status={status} />
-                      <span className="sr-only">{status === "running" ? "in progress" : status === "error" ? "needs attention" : "queued"}</span>
-                    </>
-                  )}
-                </span>
+                {count && status === "done" && <sup className="mono text-[9px] text-ink-4">{count}</sup>}
+                {status && status !== "done" && status !== "idle" && (
+                  <>
+                    <StatusDot status={status} />
+                    <span className="sr-only">{status === "running" ? "in progress" : status === "error" ? "needs attention" : "queued"}</span>
+                  </>
+                )}
               </Link>
             </li>
           );

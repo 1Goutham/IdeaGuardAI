@@ -60,7 +60,7 @@ export function Architecture() {
     >
       {(b) => (
         <div>
-          <p className="display max-w-3xl text-[24px] leading-[1.25] text-ink md:text-[28px]">{b.summary}</p>
+          <p className="display max-w-3xl text-[19px] leading-[1.35] text-ink md:text-[21px]">{b.summary}</p>
 
           <Block title="Architecture" id="layers" className="mt-14">
             <LayerDiagram layers={b.layers} />

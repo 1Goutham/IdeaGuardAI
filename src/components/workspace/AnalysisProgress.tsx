@@ -1,11 +1,11 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { STAGE_COPY } from "@/lib/agents/pipeline";
 import { useProjectActions } from "@/lib/store/ProjectsProvider";
 import { cx } from "@/lib/utils";
-import { StatusDot, TextAction } from "@/components/ui";
+import { TextAction } from "@/components/ui";
 import { STAGE_IDS, type StageState } from "@/types";
 import { useWorkspace } from "./WorkspaceContext";
 
@@ -35,65 +35,56 @@ export function AnalysisProgress() {
   const { stop } = useProjectActions();
   const startedAt = STAGE_IDS.map((id) => version.stages[id].startedAt).filter(Boolean).sort()[0];
   const elapsed = useElapsed(startedAt ?? version.createdAt, isRunning);
-  const understood = version.analysis.understand;
   const done = STAGE_IDS.filter((id) => version.stages[id].status === "done").length;
 
   return (
-    <section aria-labelledby="progress-title" className="animate-fade">
+    <section aria-labelledby="progress-title" className="animate-fade max-w-[760px]">
       <div className="flex items-baseline justify-between gap-6">
-        <p id="progress-title" className="label">
-          Analysing your idea
-        </p>
+        <h2 id="progress-title" className="text-[20px] font-normal tracking-[-0.01em] text-ink">
+          Analysing<span className="caret-blink">_</span>
+        </h2>
         <p className="mono tabular text-[11px] text-ink-3" aria-hidden="true">
-          {elapsed}
+          {done}/{STAGE_IDS.length} · {elapsed}
         </p>
       </div>
+      <p className="mt-2 max-w-xl text-[13.5px] font-light leading-relaxed text-ink-3">
+        Seven agents are working through your idea. Sections fill in as each one finishes, so you can open them now.
+      </p>
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.h1
-          key={understood ? "understood" : "raw"}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          className={cx("display mt-5 max-w-3xl text-ink", understood ? "text-[34px] md:text-[48px]" : "text-[26px] text-ink-2 md:text-[34px]")}
-        >
-          {understood ? understood.oneLiner : `“${version.idea.length > 180 ? `${version.idea.slice(0, 180)}…` : version.idea}”`}
-        </motion.h1>
-      </AnimatePresence>
-
-      <div className="mt-3 h-px w-full bg-line" aria-hidden="true">
-        <motion.div className="h-px bg-ink" initial={false} animate={{ width: `${(done / STAGE_IDS.length) * 100}%` }} />
+      <div className="mt-6 h-px w-full bg-line" aria-hidden="true">
+        <motion.div className="h-px bg-accent shadow-[0_0_12px_rgb(59_123_255/0.8)]" initial={false} animate={{ width: `${Math.max(2, (done / STAGE_IDS.length) * 100)}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
       </div>
       <p className="sr-only" aria-live="polite">
         {done} of {STAGE_IDS.length} steps complete.
       </p>
 
-      <ol className="mt-10">
-        {STAGE_IDS.map((id) => {
+      <ol className="mono mt-8 space-y-1 text-[12.5px]">
+        {STAGE_IDS.map((id, i) => {
           const s = version.stages[id];
           const copy = STAGE_COPY[id];
           const label = s.status === "done" ? copy.done : copy.running;
+          const right = s.status === "running" ? (s.note ?? "working") : s.status === "done" ? [s.note, seconds(s)].filter(Boolean).join(" · ") : s.status === "error" ? "unavailable" : "queued";
           return (
-            <li key={id} className="grid grid-cols-[1.5rem_1fr_auto] items-baseline gap-3 border-b border-line py-3.5 first:border-t">
-              <StatusDot status={s.status} className="translate-y-[2px]" />
-              <div className="min-w-0">
-                <p className={cx("text-[15.5px] transition-colors duration-500", s.status === "done" ? "text-ink" : s.status === "running" ? "text-ink" : s.status === "error" ? "text-danger" : "text-ink-4")}>
-                  {label}
-                  {s.status === "running" && <span aria-hidden="true">…</span>}
-                </p>
-                {s.status === "error" && s.error && <p className="mt-1 text-[12.5px] text-ink-3">{s.error}</p>}
-              </div>
-              <p className="mono text-right text-[11px] text-ink-3">
-                {s.status === "running" ? (s.note ?? copy.agent) : s.status === "done" ? [s.note, seconds(s)].filter(Boolean).join(" · ") : s.status === "queued" ? "" : ""}
-              </p>
-            </li>
+            <motion.li key={id} layout className="grid grid-cols-[2.6rem_minmax(0,auto)_1fr_auto] items-baseline gap-2 py-1">
+              <span className={cx(s.status === "running" ? "text-accent" : "text-ink-4")}>[{String(i + 1).padStart(2, "0")}]</span>
+              <span className={cx("truncate transition-colors duration-500", s.status === "done" ? "text-ink-2" : s.status === "running" ? "text-ink" : s.status === "error" ? "text-danger" : "text-ink-4")}>
+                {label}
+                {s.status === "running" && <span className="caret-blink">_</span>}
+              </span>
+              <span className="h-px translate-y-[-3px] border-b border-dotted border-line-2" aria-hidden="true" />
+              <span className={cx("text-right text-[11px]", s.status === "done" ? "text-ink-3" : s.status === "running" ? "text-ink-2" : s.status === "error" ? "text-danger" : "text-ink-4")}>
+                {s.status === "done" && <span className="mr-1.5 text-success">✓</span>}
+                {right}
+              </span>
+              {s.status === "error" && s.error && <p className="col-start-2 col-end-5 font-sans text-[12px] font-light text-ink-3">{s.error}</p>}
+            </motion.li>
           );
         })}
       </ol>
 
-      <div className="mt-6 flex items-center justify-between gap-6">
-        <p className="max-w-md text-[12.5px] leading-relaxed text-ink-3">
-          Competition, feasibility and risk run in parallel once research is in. Sections fill in as each agent finishes; you can open them now. On free-tier models, steps may pause for rate limits; they resume on their own.
+      <div className="mt-8 flex items-center justify-between gap-6">
+        <p className="max-w-md text-[12px] font-light leading-relaxed text-ink-4">
+          Competition, feasibility and risk run in parallel once research is in. On free-tier models, steps may pause for rate limits and resume on their own.
         </p>
         {isRunning && <TextAction onClick={() => stop(version.id)}>Stop</TextAction>}
       </div>

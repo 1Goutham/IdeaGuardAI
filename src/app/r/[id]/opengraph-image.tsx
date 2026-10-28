@@ -17,17 +17,17 @@ export default async function Image({ params }: { params: Promise<{ id: string }
 
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 72, background: "#f2f1ed", color: "#141413", fontFamily: "sans-serif" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 24, color: "#6b6a65" }}>
-          <div style={{ width: 14, height: 14, borderRadius: 999, background: "#141413" }} />
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 72, background: "#000000", color: "#f4f4f2", fontFamily: "sans-serif" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 24, color: "#8a8a85" }}>
+          <div style={{ width: 14, height: 14, borderRadius: 999, background: "#3b7bff" }} />
           IdeaGuard · shared report
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <div style={{ fontSize: 68, lineHeight: 1.05, letterSpacing: -2, maxWidth: 1000 }}>{title.slice(0, 80)}</div>
-          <div style={{ fontSize: 30, lineHeight: 1.3, color: "#46453f", maxWidth: 1000 }}>{line.slice(0, 160)}</div>
+          <div style={{ fontSize: 30, lineHeight: 1.3, color: "#bdbdb8", maxWidth: 1000 }}>{line.slice(0, 160)}</div>
         </div>
-        <div style={{ display: "flex", gap: 36, fontSize: 22, color: "#6b6a65", borderTop: "1px solid #d8d6cf", paddingTop: 24 }}>
-          {stance && <span style={{ color: "#141413" }}>{stance}</span>}
+        <div style={{ display: "flex", gap: 36, fontSize: 22, color: "#8a8a85", borderTop: "1px solid #222222", paddingTop: 24 }}>
+          {stance && <span style={{ color: "#f4f4f2" }}>{stance}</span>}
           {sources > 0 && <span>{sources} sources</span>}
           <span>Evidence and inference, labelled</span>
         </div>

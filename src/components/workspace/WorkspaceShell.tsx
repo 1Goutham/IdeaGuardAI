@@ -7,7 +7,7 @@ import { isComplete } from "@/lib/agents/pipeline";
 import { useProject, useProjectActions } from "@/lib/store/ProjectsProvider";
 import { downloadText, slugify } from "@/lib/utils";
 import { reportToMarkdown } from "@/lib/utils/markdown";
-import { Button, LinkButton, TextAction, ThemeToggle } from "@/components/ui";
+import { LinkButton, TextAction } from "@/components/ui";
 import { RefineDialog } from "./RefineDialog";
 import { ShareDialog } from "./ShareDialog";
 import { VersionSwitcher } from "./VersionSwitcher";
@@ -68,10 +68,9 @@ export function WorkspaceShell({ projectId, children }: { projectId: string; chi
             <TextAction onClick={() => setSharing(true)} disabled={!version.analysis.understand || isRunning}>
               {version.share ? "Shared" : "Share"}
             </TextAction>
-            <Button size="sm" variant={complete ? "primary" : "secondary"} onClick={() => openRefine()} disabled={isRunning}>
-              Refine idea
-            </Button>
-            <ThemeToggle />
+            <TextAction onClick={() => openRefine()} disabled={isRunning} className={complete ? "text-ink" : undefined}>
+              Refine
+            </TextAction>
           </>
         }
       >

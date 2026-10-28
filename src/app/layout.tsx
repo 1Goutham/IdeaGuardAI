@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Anonymous_Pro, Outfit } from "next/font/google";
 import { Providers } from "@/components/Providers";
-import { themeScript } from "@/components/ui";
 import "./globals.css";
 
 const outfit = Outfit({ subsets: ["latin"], weight: ["300", "400", "500"], variable: "--font-outfit", display: "swap" });
@@ -14,10 +13,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f2f1ed" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f0f0e" },
-  ],
+  themeColor: "#000000",
+  colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -26,9 +23,6 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${outfit.variable} ${mono.variable}`} suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
       <body className="min-h-dvh font-sans antialiased">
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-ink focus:px-4 focus:py-2 focus:text-[13px] focus:text-on-ink">
           Skip to content

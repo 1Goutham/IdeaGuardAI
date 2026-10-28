@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { SharedReport } from "@/lib/share";
 import { downloadText, formatDate, slugify } from "@/lib/utils";
 import { reportToMarkdown } from "@/lib/utils/markdown";
-import { LinkButton, TextAction, ThemeToggle } from "@/components/ui";
+import { PillLink, TextAction } from "@/components/ui";
 import { WorkspaceFrame } from "./WorkspaceFrame";
 import type { WorkspaceValue } from "./WorkspaceContext";
 import type { IdeaVersion, Project } from "@/types";
@@ -40,7 +40,7 @@ export function ReportShell({ id, report, children }: { id: string; report: Shar
     <WorkspaceFrame
       value={value}
       base={base}
-      titleAddon={<span className="mono hidden shrink-0 rounded-full border border-line-2 px-2 py-0.5 text-[10.5px] text-ink-3 sm:inline">Shared · read-only</span>}
+      titleAddon={<span className="mono hidden shrink-0 text-[10.5px] text-ink-4 sm:inline">/ shared · read-only</span>}
       railFooter={<p>Shared {formatDate(report.sharedAt)}</p>}
       actions={
         <>
@@ -53,10 +53,9 @@ export function ReportShell({ id, report, children }: { id: string; report: Shar
           >
             Export
           </TextAction>
-          <LinkButton href="/" size="sm" variant="primary">
+          <PillLink href="/" small>
             Analyse your idea
-          </LinkButton>
-          <ThemeToggle />
+          </PillLink>
         </>
       }
     >

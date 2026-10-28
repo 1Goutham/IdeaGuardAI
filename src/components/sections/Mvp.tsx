@@ -55,7 +55,7 @@ function MvpView({ s }: { s: StrategyResult }) {
       </div>
 
       <Block title="Suggested scope" id="scope">
-        <p className="display max-w-3xl text-[24px] leading-[1.25] text-ink md:text-[28px]">{s.mvp.scope}</p>
+        <p className="display max-w-3xl text-[19px] leading-[1.35] text-ink md:text-[21px]">{s.mvp.scope}</p>
       </Block>
 
       <Block title="How you'll know it worked" id="metric">

@@ -54,7 +54,7 @@ export function Prd() {
             ))}
           </nav>
 
-          <p className="display max-w-3xl text-[26px] leading-[1.2] text-ink md:text-[30px]">{p.summary}</p>
+          <p className="display max-w-3xl text-[19px] leading-[1.35] text-ink md:text-[22px]">{p.summary}</p>
 
           <Block title="Problem" id="problem" className="mt-14">
             <p className="measure text-[15.5px] leading-relaxed text-ink">{p.problem}</p>

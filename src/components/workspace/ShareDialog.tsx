@@ -78,7 +78,7 @@ export function ShareDialog({ open, onClose, project, version }: { open: boolean
       <div className="flex items-start justify-between gap-6 border-b border-line px-6 pb-4 pt-6">
         <div>
           <p className="label">v{version.number} · read-only link</p>
-          <h2 id="share-title" className="display mt-3 text-[30px]">
+          <h2 id="share-title" className="display mt-3 text-[24px]">
             Share this report
           </h2>
         </div>
