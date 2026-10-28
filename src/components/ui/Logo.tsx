@@ -15,52 +15,50 @@ export function LogoMark({ size = 22, className }: { size?: number; className?: 
 }
 
 export const LOGO_SRC = "/ideaguardlogo.png";
+/** public/ideaguardlogo.png is 340 × 114. */
+const LOGO_RATIO = 340 / 114;
 
 /**
- * The wordmark. Uses public/ideaguardlogo.png when it exists; until then
- * (or if it fails to load) a typeset fallback in the same spirit. Gives a
- * small wobble when you hover it.
+ * The wordmark from public/ideaguardlogo.png, sized by height with its
+ * width reserved up front so nothing shifts while it loads. Falls back to
+ * typeset text if the file is missing.
  */
-export function Wordmark({ height = 22, className }: { height?: number; className?: string }) {
-  const img = useRef<HTMLImageElement>(null);
-  const [loaded, setLoaded] = useState(false);
+export function Wordmark({ height = 22, className, priority }: { height?: number; className?: string; priority?: boolean }) {
   const [failed, setFailed] = useState(false);
+  const img = useRef<HTMLImageElement>(null);
 
-  // The image may finish loading before hydration, when onLoad has already fired.
+  // A load error can happen before hydration, when onError has already fired.
   useEffect(() => {
     const el = img.current;
-    if (el?.complete) {
-      if (el.naturalWidth > 0) setLoaded(true);
-      else setFailed(true);
-    }
+    if (el?.complete && el.naturalWidth === 0) setFailed(true);
   }, []);
 
+  if (failed) {
+    return (
+      <span className={cx("inline-flex select-none items-center font-medium leading-none tracking-[-0.04em]", className)} style={{ height, fontSize: height * 0.62 }}>
+        <span className="text-ink">Idea</span>
+        <span className="text-accent">Guard</span>
+      </span>
+    );
+  }
   return (
-    <span className={cx("relative inline-flex items-center", className)} style={{ height }}>
-      {!failed && (
-        // eslint-disable-next-line @next/next/no-img-element -- intrinsic size of a user-supplied file is unknown
-        <img
-          ref={img}
-          src={LOGO_SRC}
-          alt=""
-          style={{ height }}
-          className={cx("w-auto select-none transition-opacity duration-300", loaded ? "opacity-100" : "absolute opacity-0")}
-          draggable={false}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
-        />
-      )}
-      {!loaded && (
-        <span className="select-none font-medium leading-none tracking-[-0.04em]" style={{ fontSize: height * 0.86 }} aria-hidden="true">
-          <span className="text-ink">Idea</span>
-          <span className="text-accent">Guard</span>
-        </span>
-      )}
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element -- small static PNG; next/image adds nothing here
+    <img
+      ref={img}
+      src={LOGO_SRC}
+      alt=""
+      width={Math.round(height * LOGO_RATIO)}
+      height={height}
+      fetchPriority={priority ? "high" : undefined}
+      draggable={false}
+      onError={() => setFailed(true)}
+      className={cx("block select-none", className)}
+      style={{ height, width: "auto" }}
+    />
   );
 }
 
-export function Logo({ href = "/", height = 22, className }: { href?: string; height?: number; className?: string }) {
+export function Logo({ href = "/", height = 30, className }: { href?: string; height?: number; className?: string }) {
   const [wobble, setWobble] = useState(false);
   return (
     <Link

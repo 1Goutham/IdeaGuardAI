@@ -38,7 +38,7 @@ export function WorkspaceFrame({
         <div className="mx-auto flex min-h-dvh max-w-[1280px] flex-col px-5 md:px-10">
           <header className="no-print sticky top-0 z-30 -mx-5 bg-paper/80 px-5 backdrop-blur-md md:-mx-10 md:px-10">
             <div className="flex h-16 items-center gap-3">
-              <Logo height={24} />
+              <Logo height={32} />
               {titleAddon}
               <div className="ml-auto flex shrink-0 items-center gap-3 md:gap-4">{actions}</div>
             </div>

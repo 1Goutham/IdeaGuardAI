@@ -2,7 +2,7 @@ import { cx } from "@/lib/utils";
 import { LoopArrow, Scramble } from "@/components/ui";
 
 const STEPS = ["Research", "Stress-test", "Validate", "Build"];
-export const AUTHOR_URL = process.env.NEXT_PUBLIC_AUTHOR_URL || "https://github.com/1Goutham";
+export const AUTHOR_URL = process.env.NEXT_PUBLIC_AUTHOR_URL || "https://1goutham.space/";
 
 /** The quiet bottom bar shared by every page. */
 export function SiteFooter({ className }: { className?: string }) {

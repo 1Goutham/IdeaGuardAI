@@ -138,7 +138,7 @@ export function IdeaComposer() {
       className="grid w-full items-center gap-x-12 gap-y-8 lg:grid-cols-[auto_minmax(0,1fr)_auto]"
     >
       <div className="flex flex-col items-center gap-2.5 text-center lg:items-center">
-        <Wordmark height={30} />
+        <Wordmark height={44} priority />
         <p className="text-[15px] font-light text-ink-2">
           Turn an <span className="font-medium text-ink">idea</span> into <span className="font-medium text-ink">evidence</span>{" "}
           <span className={cx("inline-block w-[1.3em] text-left font-medium tracking-[-0.06em] text-ink transition-transform duration-300", mood === "go" && "translate-x-1")} aria-hidden="true">
