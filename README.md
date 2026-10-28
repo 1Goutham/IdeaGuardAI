@@ -36,7 +36,7 @@ npm run build
 4. Node.js 20.9 or newer is required (Settings → Build and Deployment → Node.js Version).
 
 5. **Shareable links (optional):** Storage → Create → *Upstash for Redis* (free tier), then connect it to the project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`; redeploy. Without it, the Share dialog says sharing isn't set up and everything else works.
-6. After deploying, press **Test** next to the engine status on the home page. It makes one tiny request to every configured provider and one search, and reports which work, how fast, and whether structured output passes.
+6. After deploying, press **Test** next to the engine status at the bottom of the How it works page (`/how-it-works`). It makes one tiny request to every configured provider and one search, and reports which work, how fast, and whether structured output passes.
 
 Analyses run as durable background workflows ([Vercel Workflow](https://vercel.com/docs/workflow)): each agent is a persisted, retried step, so a run survives closed tabs, dropped connections and function time limits. Each step allows up to 300 seconds, which works on every plan with Fluid Compute (on by default for new projects). Set `IDEAGUARD_RUNNER=inline` to stream from a single request instead.
 
